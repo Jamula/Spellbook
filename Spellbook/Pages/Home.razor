@@ -109,7 +109,7 @@ else
     private async Task AddCard()
     {
         if (selected is null || string.IsNullOrWhiteSpace(cardName) || quantity < 1 || quantity > 250) return;
-        var existing = selected.Cards.FirstOrDefault(c => c.Section == "Main" && string.Equals(c.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase));
+        var existing = selected.Cards.FirstOrDefault(c => string.Equals(c.Section.Trim(), "Main", StringComparison.OrdinalIgnoreCase) && string.Equals(c.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase));
         if (existing is not null) existing.Quantity = Math.Min(250, existing.Quantity + quantity);
         else selected.Cards.Add(new DeckCard { Name = cardName.Trim(), Quantity = quantity });
         cardName = ""; quantity = 1; await Persist();
