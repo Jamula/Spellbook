@@ -1,0 +1,3 @@
+# Jamula branded short links. Paths apply to both s.jamula.net and s.jamula.com.
+# Use temporary 302 redirects until targets and DNS migration are verified.
+/spellbook https://spellbook-ag4.pages.dev/ 302
