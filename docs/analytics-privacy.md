@@ -1,0 +1,34 @@
+# Analytics privacy groundwork (#22, roadmap #1)
+
+This release has **no analytics transport, vendor script loader, IDs, event queue or automatic event hooks**. The small first-party privacy script stores consent choices locally. The visible controls permit refusal/revocation; opt-in controls remain disabled because no service can launch. Even forged stored consent cannot cause a vendor request. No services or paid APIs were provisioned.
+
+The internal consent API accepts separate boolean choices for usage and recordings, rejects truthy strings and handles blocked/corrupt storage. The safe event boundary accepts only `page_view`, `deck_created`, `card_added`, `backup_exported`, `feedback_opened` and no caller-supplied payload. It currently drops every event. A future implementation must preserve the strict boundary; never pass URLs, document titles, deck/card names or IDs, media, feedback, device fields, personal data or arbitrary properties. GA's automatic collection/default page views and enhanced measurement require separate privacy review; an allowlisted event name alone cannot prevent automatic vendor data capture.
+
+## Remaining launch gates (not implemented or accepted here)
+
+- Resolve prerequisite issues #4, #5, #7, #8, #16 and verify readiness with owner.
+- Owner supplies public GA4 Measurement ID and optional Clarity project ID and explicitly approves launch. No IDs are needed for this groundwork. Repository Actions variable *names* could not be listed (403); the attached runtime exposes no configured analytics variable names. No credential values were inspected.
+- Add a reviewed transport implementation and explicit deployment configuration with default off. Do not use a browser flag or a single masking checkbox as authorization. Change the consent notice/storage version and obtain fresh separate opt-in; stored choices from this groundwork must not authorize collection.
+- Independently verify Clarity masking/exclusions for deck lists, editor/card contents, uploads, feedback and screenshot previews **before** loading Clarity for any real user. A mask attribute on this privacy panel is not proof. Review iPhone Safari recordings with owner. If masking is unreliable, omit Clarity entirely.
+- Verify live GA payloads (including automatically sent data), revocation of vendor state/cookies/queues, session stop/reload behavior, SPA navigation, ad blockers, offline behavior and performance. Current no-transport tests cannot establish future vendor compliance or recording safety.
+
+Do not close #22 when this preparatory PR lands. Launch and real-device acceptance remain outstanding. No browser/device personal fields are added by the local script. No third-party privacy/cookie promises are inferred from this local-only work.
+
+## Groundwork validation
+
+- Locked application/test restore, Release build and static publish passed. Publish reports the existing optional `wasm-tools` optimization advisory; no workload/dependency changes were made.
+- Full isolated xUnit run: 38 passed, zero failures/skips; application line coverage 250/274 = 91.24%. Four privacy cases cover disclosure, saved/unsaved refusal and blocked JS.
+- `node --test scripts/privacy.test.cjs`: two broad isolated scenarios exercise strict booleans, every permitted event, unexpected names/payloads, each separate preference combination, stored opt-in, corrupt/blocked storage and revocation with network/DOM APIs absent.
+- Official GA integration-documentation verification is blocked: `https://developers.google.com/tag-platform/gtagjs/configure` returns an explicit network-policy proxy 403. No SDK behavior or guarantees were inferred. Authoritative documentation review remains a prerequisite to a transport PR.
+- Local script cost: 1,351 uncompressed bytes, no dependencies, timers, observers, automatic event listeners, queues or third-party requests. No JS interop occurs until the user presses refusal/revocation. Browser-level results below do not represent real iPhone Safari or live vendor testing.
+- Published-site Chromium automation at 1440×1000 desktop and 390×844 mobile emulation: zero external requests and zero page errors while opening disclosure, refusing, reloading, forging opt-in and revoking offline; no horizontal overflow. All external hosts were intercepted/aborted and none were requested. Actual iPhone Safari and vendor recordings remain untested. The privacy script decoded resource body was 1,351 bytes on each viewport. A first automation attempt went offline before Blazor finished reloading and timed out; waiting for app readiness before the offline check fixed the harness, with no product change.
+
+## Owner handoff to unblock a future transport/launch
+
+1. Permit public documentation hosts `developers.google.com` and `support.google.com` in the environment network settings (and `learn.microsoft.com` for optional Clarity review), then publish/apply those network settings. Do not add Google collection/script hosts just to read docs. On recheck, the active policy still rejects the Google documentation CONNECT request with proxy 403.
+2. Make an explicit privacy decision about GA's inherent network/device/browser metadata and generated analytics identifiers. Event-name restrictions do not establish absence of automatic metadata. If the requirement remains zero device/identifier transfer, retain the current no-transport release unless authoritative documentation establishes an acceptable mode. An official Google-owned example exists at https://github.com/googleanalytics/ga-dev-tools/blob/14217f42eca6358cfa973ce0e65bc128038ba42e/src/hooks/useGtag.ts and demonstrates `send_page_view: false`; it does not establish the broader privacy, revocation or cookie guarantees required here.
+3. After review, supply the **public** GA4 Measurement ID (`G-…`) and, only if Clarity is wanted, its public project ID. These are not API secrets. Do not put API secrets, private keys or credentials in the Blazor client or chat. No current analytics configuration is inferred: repository Actions variable-name metadata remains inaccessible (403), and the current attached runtime lists no analytics variables.
+4. Approve a transport implementation/review PR first, retaining disabled-by-default deployment config and separate user opt-in. Supplying an ID alone must never count as launch approval. Review sanitized request evidence, automatic collection settings, SDK load failures, cookie/queue revocation, and SPA behavior before approving a release activation.
+5. For Clarity, independently verify all sensitive regions in actual iPhone Safari recordings and explicitly approve the evidence. Do not enable recordings merely by setting an ID/flag. If masking cannot be proven, keep recordings unavailable.
+
+This handoff does not request a paid service and does not grant launch approval. #22 remains incomplete until its implementation and external acceptance gates are fulfilled.

@@ -1,0 +1,4 @@
+.privacy-controls { margin-top: 1rem; max-width: 50rem; text-align: left; }
+summary { cursor: pointer; }
+label { display: block; margin: .75rem 0; }
+button { min-height: 44px; white-space: normal; }
