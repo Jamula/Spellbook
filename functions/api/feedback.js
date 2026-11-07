@@ -19,13 +19,13 @@ export async function onRequestPost({ request, env }) {
     return json({ error: "Origin not allowed" }, 403);
   if (!String(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json"))
     return json({ error: "JSON is required" }, 415);
-  if (Number(request.headers.get("content-length") || "0") > 6500)
+  if (Number(request.headers.get("content-length") || "0") > 32768)
     return json({ error: "Feedback too large" }, 413);
 
   let payload;
   try {
     const raw = await request.text();
-    if (new TextEncoder().encode(raw).length > 6500) return json({ error: "Feedback too large" }, 413);
+    if (new TextEncoder().encode(raw).length > 32768) return json({ error: "Feedback too large" }, 413);
     payload = JSON.parse(raw);
   } catch { return json({ error: "Invalid feedback" }, 400); }
   const kind = payload?.kind;
