@@ -19,6 +19,10 @@
         <label class="feedback-consent"><input type="checkbox" @bind="approved" /> I have reviewed this text and understand that the GitHub issue will be public.</label>
         @if (!string.IsNullOrEmpty(status)) { <p role="status">@status</p> }
         @if (!string.IsNullOrEmpty(issueUrl)) { <p><a href="@issueUrl" target="_blank" rel="noopener noreferrer">View created GitHub issue</a></p> }
+        @if (status.Contains("not configured yet", StringComparison.Ordinal))
+        {
+            <p><a href="https://github.com/Jamula/Spellbook/issues/new" target="_blank" rel="noopener noreferrer">Use GitHub directly until in-app submission is available</a></p>
+        }
         <div class="feedback-actions">
             <button type="button" class="secondary" @onclick="Close">Cancel</button>
             <button type="button" disabled="@sending" @onclick="Send">@(sending ? "Submitting…" : "Submit feedback")</button>
