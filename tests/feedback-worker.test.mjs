@@ -82,3 +82,16 @@ test('failed bot validation or GitHub API leaves no false success', async () => 
       : Response.json({ message: 'No permission' }, { status: 403 }));
   assert.equal(failedGitHub.status, 502);
 });
+
+test('valid UTF-8 feedback is accepted within character limits', async () => {
+  const unicode = { ...payload, details: '漢'.repeat(2200) };
+  let body;
+  const response = await run(unicode, async (url, options) => {
+    if (String(url).includes('/siteverify'))
+      return Response.json({ success: true, action: 'spellbook_feedback', hostname: 'spellbook-ag4.pages.dev' });
+    body = JSON.parse(options.body);
+    return Response.json({ html_url: 'https://github.com/Jamula/Spellbook/issues/100' }, { status: 201 });
+  });
+  assert.equal(response.status, 201);
+  assert.ok(body.body.includes(unicode.details));
+});
