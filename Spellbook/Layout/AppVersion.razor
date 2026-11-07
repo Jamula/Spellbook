@@ -1,0 +1,8 @@
+@using System.Reflection
+
+<p class="app-version">Version @version</p>
+
+@code {
+    private static readonly string version = typeof(App).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "unknown";
+}

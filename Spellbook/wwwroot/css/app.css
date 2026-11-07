@@ -128,3 +128,24 @@ footer { text-align: center; padding: 28px; }
 .scan-actions label{width:100%}.scan-actions label input{width:100%}
 .scan-actions details{width:100%}.scan-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}
 @media(max-width:600px){.scan-review{grid-template-columns:1fr}.scan-preview{max-height:320px;margin:auto}}
+
+/* Scryfall suggestions and on-device scan verification */
+.card-suggestions{display:grid;gap:4px;max-width:560px;margin:-8px 0 14px;padding:7px;border:1px solid var(--border);border-radius:10px;background:#fff}
+.card-suggestion{width:100%;text-align:left;border:0;background:#f1f6ef;color:#22352a;padding:10px 12px;border-radius:6px}
+.card-suggestion:hover,.card-suggestion:focus-visible{background:#e0eedf}
+.verified-card{display:flex;align-items:flex-start;gap:12px;padding:10px;border:1px solid var(--border);border-radius:10px;max-width:100%;overflow-wrap:anywhere}
+.verified-card img{width:92px;height:auto;border-radius:6px;flex-shrink:0}
+.verified-card p{margin:6px 0}
+
+/* User-controlled local video review before one frame is selected for OCR. */
+.video-frame-review{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;margin:16px 0}
+.video-frame-review video{display:block;width:min(100%,600px);max-height:420px;border-radius:12px;background:#162219}
+.video-frame-review .muted{max-width:65ch;margin:0}
+
+/* Scanning is its own distinct, keyboard-accessible card-intake section. */
+.card-scan-panel{margin-top:24px;padding:18px;border:2px solid var(--border);border-radius:14px;background:#f1f6ef;min-width:0}
+.card-scan-panel>h3{margin:0 0 10px}
+.card-scan-panel>p{line-height:1.5}
+.card-scan-panel input[type=file]{width:100%;max-width:100%;background:#fff;position:static;opacity:1;min-height:44px}
+.card-scan-panel .scan-review{background:#fff}
+@media(max-width:600px){.card-scan-panel{padding:12px}}

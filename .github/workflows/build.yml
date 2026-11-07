@@ -37,6 +37,22 @@ jobs:
           test -d publish/wwwroot/_framework
           test -s publish/wwwroot/_framework/blazor.webassembly.js
           test -n "$(find publish/wwwroot/_framework -maxdepth 1 -type f -print -quit)"
+          test -s publish/wwwroot/manifest.webmanifest
+          test -s publish/wwwroot/icons/spellbook.svg
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("publish/wwwroot/manifest.webmanifest").read_text())
+          assert manifest["display"] == "standalone"
+          assert manifest["start_url"] == "/" and manifest["scope"] == "/"
+          assert manifest["icons"] and all(
+              Path("publish/wwwroot", icon["src"].lstrip("/")).is_file()
+              for icon in manifest["icons"]
+          )
+          index = Path("publish/wwwroot/index.html").read_text()
+          assert 'rel="manifest"' in index
+          assert 'apple-mobile-web-app-title' in index
+          PY
       - name: Upload static site
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -78,7 +94,7 @@ jobs:
       - name: Summarize test results and verify tests executed
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: python3 .github/scripts/check-test-results.py coverage/tests.trx
-      - name: Check application coverage is at least 80%
+      - name: Check application coverage is at least 97%
         run: |
           cp coverage/*/coverage.cobertura.xml coverage.cobertura.xml
           python3 .github/scripts/check-coverage.py coverage.cobertura.xml
