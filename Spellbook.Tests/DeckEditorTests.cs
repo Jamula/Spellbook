@@ -268,6 +268,13 @@ public sealed class DeckEditorTests
         media.UploadFiles(InputFileContent.CreateFromBinary(new byte[20_000_001], "oversize.heic", contentType: "image/heic"));
         Assert.Contains("HEIC exceeds the 20 MB", page.Markup);
         Assert.Empty(page.FindAll(".scan-preview"));
+
+        // Unused oversized HEIC must not reject a separately selected valid JPEG.
+        media.UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "valid.jpg", contentType: "image/jpeg"),
+            InputFileContent.CreateFromBinary(new byte[20_000_001], "unused.heic", contentType: "image/heic"));
+        page.WaitForAssertion(() => Assert.Equal("data:image/jpeg;base64,AQI=",
+            page.Find(".scan-preview").GetAttribute("src")));
         Assert.Empty(SavedDecks(context)[0].Cards);
     }
 
