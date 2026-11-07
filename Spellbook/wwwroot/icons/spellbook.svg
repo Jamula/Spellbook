@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Spellbook deck lab</title>
+  <rect width="512" height="512" rx="104" fill="#365e43"/>
+  <path d="M104 132c57-16 103-10 152 23 49-33 95-39 152-23v244c-61-13-109-7-152 25-43-32-91-38-152-25z" fill="#f7faf6"/>
+  <path d="M256 155v244" fill="none" stroke="#365e43" stroke-width="18"/>
+  <path d="M150 194c32-5 56-1 78 8m-78 44c32-5 56-1 78 8m56-52c21-9 46-13 78-8m-78 60c21-9 46-13 78-8" stroke="#7a907b" stroke-width="13" stroke-linecap="round" fill="none"/>
+  <path d="m256 82 13 26 29 4-21 20 5 28-26-14-26 14 5-28-21-20 29-4z" fill="#e3c36b"/>
+</svg>
