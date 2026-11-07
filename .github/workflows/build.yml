@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # One active validation per PR/ref; an updated commit supersedes older work.
 concurrency:
@@ -14,6 +15,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,6 +29,8 @@ jobs:
           cache-dependency-path: Spellbook/packages.lock.json
       - name: Restore
         run: dotnet restore Spellbook/Spellbook.csproj --locked-mode
+      - name: Verify main-CI recovery contracts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_reconcile.py' -v
       - name: Build
         run: dotnet build Spellbook/Spellbook.csproj --configuration Release --no-restore --warnaserror
       - name: Publish static site
@@ -63,6 +67,7 @@ jobs:
 
   coverage:
     name: Test coverage
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -96,7 +101,7 @@ jobs:
       - name: Summarize test results and verify tests executed
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: python3 .github/scripts/check-test-results.py coverage/tests.trx
-      - name: Check application coverage is at least 95%
+      - name: Check application coverage is at least 97%
         run: |
           cp coverage/*/coverage.cobertura.xml coverage.cobertura.xml
           python3 .github/scripts/check-coverage.py coverage.cobertura.xml
