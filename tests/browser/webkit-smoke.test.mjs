@@ -90,7 +90,7 @@ test('iPhone WebKit opens in-app feedback modal without navigation or private da
     const dialog = page.locator('dialog.feedback-dialog');
     await dialog.waitFor({ state: 'attached' });
     await page.waitForFunction(() => document.querySelector('dialog.feedback-dialog')?.open === true,
-      { timeout: 10000 }).catch(async error => {
+      null, { timeout: 10000 }).catch(async error => {
       console.error('feedback modal state', await page.evaluate(() => ({
         dialog: [...document.querySelectorAll('dialog.feedback-dialog')]
           .map(d => ({ open: d.open, html: d.outerHTML.slice(0, 240) })),
