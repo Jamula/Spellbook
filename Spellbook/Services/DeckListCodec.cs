@@ -52,12 +52,14 @@ public static partial class DeckListCodec
             var heading = line.TrimEnd(':').Trim('[', ']');
             if (Zones.TryGetValue(heading, out var zone)) { section = zone; continue; }
             var rowSection = section;
-            if (line.StartsWith("SB:", StringComparison.OrdinalIgnoreCase)) { rowSection = "Sideboard"; line = line[3..].Trim(); }
+            var sideboardPrefix = line.StartsWith("SB:", StringComparison.OrdinalIgnoreCase);
+            if (sideboardPrefix) { rowSection = "Sideboard"; line = line[3..].Trim(); }
             var match = CardLine().Match(line);
             if (!match.Success) throw new InvalidDataException($"Line {number}: expected a quantity followed by a card name.");
             var name = match.Groups[2].Value.Trim();
             // Archidekt text includes categories in brackets; only recognized board names change zones.
             var taggedZones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (sideboardPrefix) taggedZones.Add("Sideboard");
             while (TrailingTag().IsMatch(name))
             {
                 var tag = TrailingTag().Match(name);
@@ -86,7 +88,14 @@ public static partial class DeckListCodec
         try
         {
             var headers = parser.ReadFields() ?? [];
-            int Find(params string[] names) => Array.FindIndex(headers, h => names.Contains(h, StringComparer.OrdinalIgnoreCase));
+            int Find(params string[] names)
+            {
+                var indices = Enumerable.Range(0, headers.Length)
+                    .Where(i => names.Contains(headers[i], StringComparer.OrdinalIgnoreCase)).ToArray();
+                if (indices.Length > 1)
+                    throw new InvalidDataException($"CSV must use only one of these column aliases: {string.Join(", ", names)}.");
+                return indices.Length == 0 ? -1 : indices[0];
+            }
             if (headers.Distinct(StringComparer.OrdinalIgnoreCase).Count() != headers.Length)
                 throw new InvalidDataException("CSV column names must be unique.");
             var nameIndex = Find("Name", "Card Name", "Card");
@@ -102,7 +111,12 @@ public static partial class DeckListCodec
                 var row = parser.ReadFields() ?? [];
                 if (row.Length != headers.Length) throw new InvalidDataException($"CSV row {line}: column count does not match the header.");
                 var section = zoneIndex >= 0 ? ResolveCategories(row[zoneIndex], warnings) : "Main";
-                if (commanderIndex >= 0 && (row[commanderIndex].Equals("true", StringComparison.OrdinalIgnoreCase) || row[commanderIndex] == "1")) section = "Commander";
+                if (commanderIndex >= 0 && (row[commanderIndex].Equals("true", StringComparison.OrdinalIgnoreCase) || row[commanderIndex] == "1"))
+                {
+                    if (section is "Sideboard" or "Maybeboard")
+                        throw new InvalidDataException($"CSV row {line}: conflicting boards; choose one board before importing.");
+                    section = "Commander";
+                }
                 Add(deck, row[nameIndex], row[quantityIndex], section, line);
             }
         }
@@ -145,7 +159,12 @@ public static partial class DeckListCodec
         {
             var zone = Zones[section.Key];
             text.AppendLine(zone == "Main" ? "Mainboard" : zone);
-            foreach (var card in section) text.AppendLine($"{card.Quantity} {card.Name}");
+            foreach (var card in section)
+            {
+                if (TrailingTag().IsMatch(card.Name.Trim()) || PrintingSuffix().IsMatch(card.Name.Trim()))
+                    throw new InvalidDataException("A card name is ambiguous in TXT. Use CSV or JSON export to preserve it.");
+                text.AppendLine($"{card.Quantity} {card.Name}");
+            }
             text.AppendLine();
         }
         return text.ToString();
