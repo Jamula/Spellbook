@@ -6,6 +6,21 @@ const origin = 'http://127.0.0.1:4173';
 const browser = await webkit.launch({ headless: true });
 after(async () => browser.close());
 
+async function openAppReady(page) {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const create = page.getByRole('button', { name: 'Create deck' });
+  try {
+    await create.waitFor({ timeout: 12000 });
+  } catch {
+    // WebKit WASM bootstrap can lag on a cold, loaded CI runner. One reload
+    // verifies the app recovers rather than accepting a permanently blank page.
+    console.warn('WebKit bootstrap was delayed; retrying once after reload');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await create.waitFor({ timeout: 20000 });
+  }
+}
+
+
 test('mobile WebKit loads Spellbook with PWA metadata and local icon', async () => {
   const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
   const page = await context.newPage();
@@ -48,7 +63,7 @@ test('iPhone WebKit creates a deck, edits a card and persists after reload', asy
   const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
   const page = await context.newPage();
   try {
-    await page.goto('/');
+    await openAppReady(page);
     await page.getByRole('button', { name: 'Create deck' }).waitFor({ timeout: 30000 });
     await page.getByRole('textbox', { name: 'New deck name' }).fill('WebKit smoke deck');
     await page.getByRole('button', { name: 'Create deck' }).click();
@@ -63,4 +78,62 @@ test('iPhone WebKit creates a deck, edits a card and persists after reload', asy
   } finally {
     await context.close();
   }
+});
+
+test('iPhone WebKit opens in-app feedback modal without navigation or private data', async () => {
+  const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
+  const page = await context.newPage();
+  try {
+    await openAppReady(page);
+    await page.getByRole('button', { name: 'Send feedback' }).click();
+    // Inspect the real native dialog; WebKit's accessibility tree can lag behind it.
+    const dialog = page.locator('dialog.feedback-dialog');
+    await dialog.waitFor({ state: 'attached' });
+    await page.waitForFunction(() => document.querySelector('dialog.feedback-dialog')?.open === true,
+      null, { timeout: 10000 }).catch(async error => {
+      console.error('feedback modal state', await page.evaluate(() => ({
+        dialog: [...document.querySelectorAll('dialog.feedback-dialog')]
+          .map(d => ({ open: d.open, html: d.outerHTML.slice(0, 240) })),
+        status: [...document.querySelectorAll('[role=status]')].map(e => e.textContent),
+        loaded: Boolean(window.spellbookFeedback)
+      })));
+      throw error;
+    });
+    assert.equal(await dialog.evaluate(element => element.open), true);
+    await dialog.getByRole('textbox', { name: 'Title' }).fill('Scanner feedback');
+    await dialog.getByRole('textbox', { name: 'Description and reproduction steps' })
+      .fill('A mana symbol was included with the recognized card name.');
+    await page.getByText('Feedback submission is not configured yet').waitFor();
+    assert.equal(await dialog.getByRole('link', { name: /Use GitHub directly/ }).count(), 1);
+    assert.equal(new URL(page.url()).pathname, '/');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    assert.equal(await dialog.evaluate(element => element.open), false);
+  } finally { await context.close(); }
+});
+
+test('iPhone WebKit keeps selected photo local and requires editable card-name confirmation', async () => {
+  const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
+  const page = await context.newPage();
+  try {
+    await openAppReady(page);
+    await page.getByRole('button', { name: 'Create deck' }).waitFor({ timeout: 30000 });
+    await page.getByRole('textbox', { name: 'New deck name' }).fill('Photo smoke deck');
+    await page.getByRole('button', { name: 'Create deck' }).click();
+    await page.getByRole('region', { name: 'Scan a card' }).waitFor();
+    const { readFileSync } = await import('node:fs');
+    await page.locator('#card-media-picker').setInputFiles({
+      name: 'local-card.png',
+      mimeType: 'image/png',
+      buffer: readFileSync('Spellbook/wwwroot/icons/spellbook-192.png')
+    });
+    await page.locator('.scan-preview').waitFor();
+    assert.match(await page.locator('.scan-preview').getAttribute('src'), /^data:image\/png;base64,/);
+    assert.equal(await page.locator('.card-row').count(), 0);
+    const candidate = page.getByRole('textbox', { name: 'Name from photo' });
+    await candidate.fill('Avacyn, Angel of Hope');
+    await candidate.press('Tab');
+    await page.getByRole('button', { name: 'Add confirmed card' }).click();
+    await page.locator('.card-row a[href^="https://scryfall.com/search"]').waitFor();
+    assert.equal(await page.locator('.card-row').count(), 1);
+  } finally { await context.close(); }
 });
