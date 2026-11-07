@@ -29,8 +29,10 @@ jobs:
           cache-dependency-path: Spellbook/packages.lock.json
       - name: Restore
         run: dotnet restore Spellbook/Spellbook.csproj --locked-mode
+      - name: Verify main-CI recovery contracts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_reconcile.py' -v
       - name: Verify release safety contracts
-        run: python3 -m unittest discover -s .github/release-tools -p 'test_*.py' -v
+        run: python3 -m unittest discover -s .github/release-tools -p 'test_release.py' -v
       - name: Build
         run: dotnet build Spellbook/Spellbook.csproj --configuration Release --no-restore --warnaserror
       - name: Publish static site

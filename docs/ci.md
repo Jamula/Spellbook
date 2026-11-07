@@ -16,7 +16,9 @@ The pinned coverage action's `resolve_upload_context.py` fallback uses real
 dispatch `GITHUB_SHA` and `GITHUB_REF` (`refs/heads/main`) directly in the coverage
 API; no event or PR context is fabricated. Scheduled jobs can be delayed. A rare
 simultaneous-push race can queue two runs; per-ref concurrency allows one active
-main validation.
+main validation. Recovery validates latest main rather than building every
+historical SHA skipped by bot events. Scheduled workflows may be disabled by
+GitHub after 60 days of repository inactivity; explicit dispatch remains available.
 
 The required check names are unchanged:
 
@@ -88,6 +90,5 @@ minutes; process dumps are disabled, and the job has a separate 15-minute limit.
 `spellbook-coverage` retains raw Cobertura and TRX diagnostics for 14 days even
 if the test or coverage gate fails, provided files were produced. The original
 test command's failed status is preserved. The static site artifact also lasts
-14 days and contains a manifest-backed ZIP and checksum. Permanent immutable
-release assets and production/rollback controls are in [releases.md](releases.md).
+14 days; longer-lived release artifacts belong to the Phase2 release process.
 The existing coverage threshold and GitHub coverage upload remain enforced.
