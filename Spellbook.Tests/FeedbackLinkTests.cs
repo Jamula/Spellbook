@@ -51,5 +51,8 @@ public sealed class FeedbackLinkTests
         Assert.Contains("No deck data or device details are included automatically", notice.TextContent);
         Assert.DoesNotContain("Confidential", Uri.UnescapeDataString(link.GetAttribute("href")!));
         Assert.Empty(context.JSInterop.Invocations);
+        var version = layout.Find(".app-version").TextContent;
+        Assert.Matches(@"^Version \d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$", version);
+        Assert.DoesNotContain("+", version);
     }
 }
