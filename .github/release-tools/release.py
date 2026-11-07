@@ -74,6 +74,7 @@ def candidate(run, checks, version):
     require(re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-rc\.[1-9]\d*)?", version), "Use vMAJOR.MINOR.PATCH or -rc.N")
     require(run["name"] == "Build Spellbook" and run["path"] == ".github/workflows/build.yml", "Wrong build workflow")
     require(run["head_branch"] == "main" and run["event"] in {"push", "workflow_dispatch"}, "Candidate must be a real main build")
+    require(run["head_repository"]["full_name"] == run["repository"]["full_name"], "Fork build is not a release source")
     require(run["status"] == "completed" and run["conclusion"] == "success", "Build/tests must pass")
     require(re.fullmatch(r"[a-f0-9]{40}", run["head_sha"]), "Missing commit SHA")
     # GitHub's aggregate can be skipped/absent while its dynamic security
@@ -85,6 +86,7 @@ def candidate(run, checks, version):
     require(analysis["path"] == "dynamic/github-code-scanning/codeql" and
             analysis["head_branch"] == "main" and analysis["head_sha"] == run["head_sha"] and
             analysis["repository"]["full_name"] == run["repository"]["full_name"] and
+            analysis["head_repository"]["full_name"] == run["repository"]["full_name"] and
             analysis["status"] == "completed" and analysis["conclusion"] == "success", "Trusted main security workflow must pass")
     jobs = checks["security_jobs"]["jobs"]
     required = {"Analyze (csharp)", "Analyze (javascript-typescript)", "Analyze (actions)"}

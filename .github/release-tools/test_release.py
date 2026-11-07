@@ -46,12 +46,12 @@ class ReleaseContracts(unittest.TestCase):
             self.assertFalse((root / "escape").exists())
 
     def test_failed_or_untrusted_gates_never_qualify_candidate(self):
-        run = dict(name="Build Spellbook", path=".github/workflows/build.yml", head_branch="main", event="push", status="completed", conclusion="success", head_sha=SHA, repository={"full_name": "Jamula/Spellbook"})
+        run = dict(name="Build Spellbook", path=".github/workflows/build.yml", head_branch="main", event="push", status="completed", conclusion="success", head_sha=SHA, repository={"full_name": "Jamula/Spellbook"}, head_repository={"full_name": "Jamula/Spellbook"})
         analysis = run | {"path": "dynamic/github-code-scanning/codeql"}
         jobs = {"jobs": [dict(name=n, status="completed", conclusion="success") for n in ("Analyze (csharp)", "Analyze (actions)", "Analyze (javascript-typescript)")]}
         checks = {"check_runs": [dict(name="CodeQL", app={"id": 57789}, status="completed", conclusion="success")], "security_run": analysis, "security_jobs": jobs}
         self.assertEqual(SHA, candidate(run, checks, "v1.2.3-rc.1"))
-        for field, value in (("event", "pull_request"), ("conclusion", "failure"), ("status", "in_progress"), ("head_branch", "feature"), ("path", "other.yml")):
+        for field, value in (("event", "pull_request"), ("conclusion", "failure"), ("status", "in_progress"), ("head_branch", "feature"), ("path", "other.yml"), ("head_repository", {"full_name": "fork/Spellbook"})):
             with self.subTest(field=field), self.assertRaises(ValueError): candidate(run | {field: value}, checks, "v1.2.3")
         for version in ("v01.2.3", "main", "v1.2.3/evil", "v1.2.3-rc.0"):
             with self.subTest(version=version), self.assertRaises(ValueError): candidate(run, checks, version)
@@ -59,7 +59,7 @@ class ReleaseContracts(unittest.TestCase):
         self.assertEqual(SHA, candidate(run, checks | {"check_runs": [checks["check_runs"][0] | {"conclusion": "skipped"}]}, "v1.2.3"))
         for bad in ({"check_runs": [checks["check_runs"][0] | {"conclusion": "failure"}]}, {"security_jobs": {"jobs": []}}, {"security_jobs": {"jobs": [jobs["jobs"][0] | {"conclusion": "skipped"}]}}):
             with self.subTest(bad=bad), self.assertRaises(ValueError): candidate(run, checks | bad, "v1.2.3")
-        for field, value in (("head_sha", "b" * 40), ("head_branch", "feature"), ("path", "dynamic/github-code-quality/codeql"), ("repository", {"full_name": "fork/Spellbook"}), ("conclusion", "failure")):
+        for field, value in (("head_sha", "b" * 40), ("head_branch", "feature"), ("path", "dynamic/github-code-quality/codeql"), ("repository", {"full_name": "fork/Spellbook"}), ("head_repository", {"full_name": "fork/Spellbook"}), ("conclusion", "failure")):
             with self.subTest(field=field), self.assertRaises(ValueError): candidate(run, checks | {"security_run": analysis | {field: value}}, "v1.2.3")
 
     def test_production_requires_independent_approval_and_no_competing_git_deploy(self):
