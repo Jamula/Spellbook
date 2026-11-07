@@ -19,7 +19,7 @@ else
         <input aria-label="New deck name" placeholder="New deck name" maxlength="160" @bind="newDeckName" />
         <button @onclick="AddDeck">Create deck</button>
         <button class="secondary" @onclick="Export">Export JSON</button>
-        <label class="upload">Import JSON <InputFile OnChange="Import" accept=".json,application/json" /></label>
+        <div class="import-picker"><label for="deck-json-import">Import JSON backup</label><InputFile id="deck-json-import" aria-label="Import JSON backup file" OnChange="Import" accept=".json,application/json,text/plain" /></div>
     </div>
     @if (!string.IsNullOrEmpty(message)) { <p role="status" class="note">@message</p> }
     <div class="columns">
