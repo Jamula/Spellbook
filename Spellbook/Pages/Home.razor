@@ -1,5 +1,6 @@
 @page "/"
 @inject DeckStore Store
+@inject IJSRuntime JS
 <h1>My decks</h1>
 <p class="muted">Build, tune, and export decks. All changes are saved locally in this browser.</p>
 <p role="note"><strong>Back up your decks:</strong> This browser storage does not sync to your other devices, and clearing Safari/browser data can erase it. Use <strong>Export JSON</strong> regularly and store the downloaded file somewhere safe.</p>
@@ -47,10 +48,29 @@ else
                     <div class="card-row"><span>@card.Name</span><div class="row-actions"><button aria-label="Decrease quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @card.Name" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
                 }
                 </div>
-                <h3>iPhone photo / video intake</h3>
-                <p>Choose images or videos from your iPhone. This prototype confirms the selected files; it does <strong>not</strong> upload or analyze them.</p>
+                <h3>Scan a card from a photo</h3>
+                <p>Take a clear photo of one card or choose an existing image. Your image stays in this browser; recognition runs on your device after you press the button. OCR software and language data are downloaded from a third-party CDN on first use, but the photo is not sent to an OCR service.</p>
                 <InputFile OnChange="MediaSelected" accept="image/*,video/*" multiple />
                 @if (mediaNames.Count > 0) { <p role="status">Selected: @string.Join(", ", mediaNames)</p> }
+                @if (!string.IsNullOrEmpty(mediaMessage)) { <p role="status" class="note">@mediaMessage</p> }
+                @if (!string.IsNullOrEmpty(previewDataUrl))
+                {
+                    <div class="scan-review">
+                        <img class="scan-preview" alt="Selected local card photo for review" src="@previewDataUrl" />
+                        <div class="scan-actions">
+                            <button @onclick="ReadPhoto" disabled="@mediaBusy">@(mediaBusy ? "Reading photo…" : "Recognize text on device")</button>
+                            <button class="secondary" @onclick="ClearScan" disabled="@mediaBusy">Clear photo</button>
+                            <label>Card name (confirm or correct)
+                                <input aria-label="Name from photo" maxlength="200" @bind="candidateName" />
+                            </label>
+                            <button @onclick="ConfirmScannedCard" disabled="@mediaBusy">Add confirmed card</button>
+                            @if (!string.IsNullOrWhiteSpace(recognizedText))
+                            {
+                                <details><summary>Review extracted text</summary><pre class="scan-text">@recognizedText</pre></details>
+                            }
+                        </div>
+                    </div>
+                }
             </section>
         }
     </div>
@@ -67,6 +87,11 @@ else
     private int quantity = 1;
     private string message = "";
     private List<string> mediaNames = [];
+    private string? previewDataUrl;
+    private string candidateName = "";
+    private string recognizedText = "";
+    private string mediaMessage = "";
+    private bool mediaBusy;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -98,7 +123,7 @@ else
         decks.Add(deck); selected = deck; lastSavedName = deck.Name; newDeckName = "";
         await Persist();
     }
-    private void Select(Deck deck) { selected = deck; lastSavedName = deck.Name; mediaNames.Clear(); message = ""; }
+    private void Select(Deck deck) { selected = deck; lastSavedName = deck.Name; ClearScan(); message = ""; }
     private async Task DeleteDeck()
     {
         if (selected is null) return;
@@ -180,8 +205,87 @@ else
         }
         catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException) { message = $"Import failed: {ex.Message}"; }
     }
-    private void MediaSelected(InputFileChangeEventArgs e)
+    private async Task MediaSelected(InputFileChangeEventArgs e)
     {
-        mediaNames = e.GetMultipleFiles(25).Select(f => f.Name).ToList();
+        ClearScan();
+        var files = e.GetMultipleFiles(25);
+        mediaNames = files.Select(f => f.Name).ToList();
+        if (files.Count == 0) return;
+        var image = files.FirstOrDefault(f => f.ContentType is "image/jpeg" or "image/png" or "image/webp");
+        if (image is null)
+        {
+            mediaMessage = "No supported image selected. Video frame selection and HEIC conversion are not available yet.";
+            return;
+        }
+        if (image.Size > 6_000_000)
+        {
+            mediaMessage = "Photo exceeds 6 MB. Please choose or capture a smaller JPEG, PNG, or WebP photo.";
+            return;
+        }
+        try
+        {
+            using var stream = image.OpenReadStream(6_000_000);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            previewDataUrl = $"data:{image.ContentType};base64,{Convert.ToBase64String(buffer.ToArray())}";
+            mediaMessage = "Preview ready. Recognition is optional, and nothing is added until you confirm.";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            previewDataUrl = null;
+            mediaMessage = "Could not read the photo on this device. Try a smaller image.";
+        }
+    }
+
+    private async Task ReadPhoto()
+    {
+        if (previewDataUrl is null || mediaBusy) return;
+        mediaBusy = true;
+        mediaMessage = "Reading card text locally. The first run may take a while while OCR assets download.";
+        try
+        {
+            var text = await JS.InvokeAsync<string>("spellbookMedia.recognize", previewDataUrl);
+            recognizedText = text.Trim();
+            // OCR can mistake card names for other printed text. Every candidate must be confirmed.
+            candidateName = recognizedText.Split('\\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim().Trim('\\r'))
+                .FirstOrDefault(line => line.Length is >= 2 and <= 200) ?? "";
+            mediaMessage = string.IsNullOrWhiteSpace(candidateName)
+                ? "No readable card title found. Enter the card name yourself."
+                : "Review and correct the proposed card name before adding it.";
+        }
+        catch (JSException)
+        {
+            mediaMessage = "On-device OCR is unavailable. You can still type the card name manually.";
+        }
+        finally
+        {
+            mediaBusy = false;
+        }
+    }
+
+    private async Task ConfirmScannedCard()
+    {
+        if (selected is null || mediaBusy || string.IsNullOrWhiteSpace(previewDataUrl)) return;
+        if (string.IsNullOrWhiteSpace(candidateName) || candidateName.Trim().Length > 200)
+        {
+            mediaMessage = "Enter a valid card name (1–200 characters) before adding.";
+            return;
+        }
+        cardName = candidateName.Trim();
+        quantity = 1;
+        await AddCard();
+        mediaMessage = "Confirmed card added to the selected deck.";
+        candidateName = "";
+        recognizedText = "";
+    }
+
+    private void ClearScan()
+    {
+        mediaNames.Clear();
+        previewDataUrl = null;
+        candidateName = "";
+        recognizedText = "";
+        mediaMessage = "";
     }
 }
