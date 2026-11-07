@@ -14,15 +14,20 @@ public sealed class DeckStore(IJSRuntime js)
         try
         {
             var json = await js.InvokeAsync<string?>("spellbookStorage.get", Key);
-            return string.IsNullOrWhiteSpace(json) ? [] :
-                JsonSerializer.Deserialize<List<Deck>>(json, Options)
-                ?? throw new InvalidDataException("Saved decks could not be read.");
+            return string.IsNullOrWhiteSpace(json) ? [] : ParseImport(json);
         }
         catch (Exception ex) when (ex is JSException or JsonException or InvalidDataException)
         {
             // Never pretend a damaged store is empty: saving an empty collection would destroy user data.
             throw new InvalidDataException("Saved deck data could not be loaded. Nothing has been changed. Restore a JSON backup or recover your browser data.", ex);
         }
+    }
+
+    public async Task ExportDamagedAsync()
+    {
+        var raw = await js.InvokeAsync<string?>("spellbookStorage.get", Key);
+        if (!string.IsNullOrWhiteSpace(raw))
+            await js.InvokeVoidAsync("spellbookStorage.download", "spellbook-recovery-raw.json", raw);
     }
 
     public Task SaveAsync(List<Deck> decks) =>
