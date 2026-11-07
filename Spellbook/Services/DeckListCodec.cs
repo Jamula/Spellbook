@@ -208,6 +208,9 @@ public static partial class DeckListCodec
             if (string.IsNullOrWhiteSpace(card.Name) || card.Name.Length > 200 || card.Name.Any(char.IsControl) || card.Quantity is < 1 or > 250)
                 throw new InvalidDataException("A card cannot be represented safely in a deck list. Use JSON backup to preserve it.");
         }
+        if (deck.Cards.GroupBy(c => Zones[c.Section] + "\u001f" + c.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Any(cards => cards.Sum(c => c.Quantity) > 250))
+            throw new InvalidDataException("Combined card quantity in a supported zone exceeds 250. Use JSON backup to preserve it.");
     }
 
     [GeneratedRegex("(?:^|,)\\s*\"?(?:Name|Card Name|Card|Quantity|Count|Qty)\"?\\s*(?:,|$)", RegexOptions.IgnoreCase)] private static partial Regex HeaderName();
