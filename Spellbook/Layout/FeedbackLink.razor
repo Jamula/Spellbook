@@ -37,7 +37,12 @@
     private string status = "";
     private string? issueUrl;
 
-    private Task Open() => JS.InvokeVoidAsync("spellbookFeedback.open", dialog).AsTask();
+    private async Task Open()
+    {
+        status = "";
+        if (!await JS.InvokeAsync<bool>("spellbookFeedback.open", dialog))
+            status = "Feedback submission is not configured yet. Please try again later.";
+    }
     private Task Close() => JS.InvokeVoidAsync("spellbookFeedback.close", dialog).AsTask();
 
     private async Task Send()
