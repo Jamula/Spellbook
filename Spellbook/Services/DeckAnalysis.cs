@@ -38,7 +38,7 @@ public sealed class DeckAnalysis
                 .Contains("Land", StringComparer.OrdinalIgnoreCase);
             if (!knownType) result.UnknownTypes += count;
             if (isLand) result.Lands += count;
-            else if (knownType && details?.ManaValue is double mana && double.IsFinite(mana) && mana >= 0)
+            else if (knownType && details!.ManaValue is double mana && double.IsFinite(mana) && mana >= 0)
                 result.Curve[(int)Math.Min(7, Math.Floor(mana))] += count;
             else result.UnknownMana += count;
 
