@@ -85,6 +85,12 @@ public sealed class DeckEditorTests
         page.WaitForAssertion(() => Assert.Equal("Existing", page.Find("h2").TextContent));
         Assert.Contains("Main deck · 3 cards", page.Markup);
 
+        // Safari must receive a user-tappable native file input, not a transparent overlay.
+        var importControl = page.Find("#deck-json-import");
+        Assert.Equal("file", importControl.GetAttribute("type"));
+        Assert.Contains(".json", importControl.GetAttribute("accept"));
+        Assert.DoesNotContain("upload", importControl.ParentElement!.ClassList);
+
         var importer = page.FindComponents<InputFile>()[0];
         importer.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
         Assert.Contains("Import failed:", page.Find("[role='status']").TextContent);
