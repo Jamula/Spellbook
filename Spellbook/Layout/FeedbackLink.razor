@@ -3,7 +3,7 @@
 <section class="feedback-section" aria-label="Feedback">
     <button type="button" class="feedback-link" @onclick="Open">Send feedback</button>
     <p class="feedback-notice">Share bugs and suggestions without leaving Spellbook. Submitted issues are public; review your text and do not include private deck or account information.</p>
-    <dialog class="feedback-dialog" @ref="dialog">
+    <dialog class="feedback-dialog" @ref="dialog" @oncancel="OnCancel">
         <h2>Send feedback</h2>
         <p>This creates a public issue in Jamula/Spellbook. No decks, photos, browser storage, or device details are included automatically.</p>
         <label for="feedback-kind">Feedback type</label>
@@ -33,6 +33,7 @@
 
 @code {
     private ElementReference dialog;
+    private bool modalOpen;
     private string kind = "Bug";
     private string subject = "";
     private string details = "";
@@ -43,11 +44,24 @@
 
     private async Task Open()
     {
+        modalOpen = true;
         status = "";
         if (!await JS.InvokeAsync<bool>("spellbookFeedback.open", dialog))
             status = "Feedback submission is not configured yet. Please try again later.";
     }
-    private Task Close() => JS.InvokeVoidAsync("spellbookFeedback.close", dialog).AsTask();
+    private async Task Close()
+    {
+        modalOpen = false;
+        await JS.InvokeVoidAsync("spellbookFeedback.close", dialog);
+    }
+
+    private void OnCancel() => modalOpen = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // A Blazor re-render must never silently dismiss the native modal.
+        if (modalOpen) await JS.InvokeVoidAsync("spellbookFeedback.ensureOpen", dialog);
+    }
 
     private async Task Send()
     {
