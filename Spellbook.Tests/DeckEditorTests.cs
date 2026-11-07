@@ -156,6 +156,32 @@ public sealed class DeckEditorTests
         Assert.Equal("Recovered", Assert.Single(SavedDecks(context)).Name);
     }
 
+    [Fact]
+    public void LocalPhotoPreviewRequiresUserConfirmationBeforeAddingToDeck()
+    {
+        using var context = CreateContext();
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Photo deck");
+        Button(page, "Create deck").Click();
+
+        var media = page.FindComponents<InputFile>()[1];
+        media.UploadFiles(InputFileContent.CreateFromBinary([1, 2, 3, 4], "card.jpg", contentType: "image/jpeg"));
+
+        Assert.Contains("Selected: card.jpg", page.Markup);
+        Assert.Equal("data:image/jpeg;base64,AQIDBA==", page.Find(".scan-preview").GetAttribute("src"));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+
+        page.Find("[aria-label='Name from photo']").Change("Lightning Bolt");
+        Button(page, "Add confirmed card").Click();
+        Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name);
+        Assert.Equal(1, Assert.Single(SavedDecks(context)[0].Cards).Quantity);
+
+        Button(page, "Clear photo").Click();
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Assert.DoesNotContain("Selected: card.jpg", page.Markup);
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();
