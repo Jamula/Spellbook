@@ -13,8 +13,8 @@ if valid <= 0 or not 0 <= covered <= valid:
 
 percentage = 100 * covered / valid
 print(f"Application line coverage: {percentage:.2f}% ({covered}/{valid} lines)")
-if percentage < 80:
-    sys.exit("Application line coverage is below the CI minimum of 80%.")
+if percentage < 95:
+    sys.exit("Application line coverage is below the CI minimum of 95%.")
 
 # Coverlet uses the application project as its source root. GitHub needs
 # filenames relative to the repository, which also contains the test project.

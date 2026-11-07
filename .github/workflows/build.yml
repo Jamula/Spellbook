@@ -94,7 +94,7 @@ jobs:
       - name: Summarize test results and verify tests executed
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: python3 .github/scripts/check-test-results.py coverage/tests.trx
-      - name: Check application coverage is at least 80%
+      - name: Check application coverage is at least 95%
         run: |
           cp coverage/*/coverage.cobertura.xml coverage.cobertura.xml
           python3 .github/scripts/check-coverage.py coverage.cobertura.xml
