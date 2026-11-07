@@ -136,3 +136,8 @@ footer { text-align: center; padding: 28px; }
 .verified-card{display:flex;align-items:flex-start;gap:12px;padding:10px;border:1px solid var(--border);border-radius:10px;max-width:100%;overflow-wrap:anywhere}
 .verified-card img{width:92px;height:auto;border-radius:6px;flex-shrink:0}
 .verified-card p{margin:6px 0}
+
+/* User-controlled local video review before one frame is selected for OCR. */
+.video-frame-review{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;margin:16px 0}
+.video-frame-review video{display:block;width:min(100%,600px);max-height:420px;border-radius:12px;background:#162219}
+.video-frame-review .muted{max-width:65ch;margin:0}
