@@ -309,6 +309,83 @@ public sealed class DeckEditorTests
         page.WaitForAssertion(() => Assert.Contains(SavedDecks(context)[0].Cards, card => card.Name == "My custom offline card"));
     }
 
+
+    [Fact]
+    public void ScryfallLookupFailureRetainsManualEntry()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetException(new Microsoft.JSInterop.JSException("Network unavailable"));
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Offline lookup");
+        Button(page, "Create deck").Click();
+        page.Find("[aria-label='Card name']").Input("Lightning");
+        page.WaitForAssertion(() => Assert.Contains("Scryfall is unavailable", page.Markup),
+            timeout: TimeSpan.FromSeconds(4));
+        Assert.Empty(page.FindAll(".card-suggestions"));
+
+        page.Find("[aria-label='Card name']").Change("Custom card");
+        Button(page, "Add").Click();
+        page.WaitForAssertion(() => Assert.Equal("Custom card", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Fact]
+    public void OcrFailureCanBeRecoveredByManualCardName()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.recognize", _ => true)
+            .SetException(new Microsoft.JSInterop.JSException("OCR worker failed"));
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Fallback");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "ocr-failure.jpg", contentType: "image/jpeg"));
+        Button(page, "Recognize text on device").Click();
+        page.WaitForAssertion(() => Assert.Contains("On-device OCR is unavailable", page.Markup));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+
+        page.Find("[aria-label='Name from photo']").Change("Forest");
+        Button(page, "Add confirmed card").Click();
+        page.WaitForAssertion(() => Assert.Equal("Forest", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Fact]
+    public void ExactScryfallLookupWithoutMatchNeverAutomaticallyAddsCard()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Mode = Bunit.JSInterop.JSRuntimeMode.Loose;
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Verify manually");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "unknown-card.jpg", contentType: "image/jpeg"));
+        page.Find("[aria-label='Name from photo']").Change("Not a known MTG card");
+        Button(page, "Verify against Scryfall").Click();
+        page.WaitForAssertion(() => Assert.Contains("No exact Scryfall match", page.Markup));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+        Button(page, "Add confirmed card").Click();
+        page.WaitForAssertion(() => Assert.Equal("Not a known MTG card", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Fact]
+    public void InvalidDeckRenameCannotOverwriteSavedName()
+    {
+        using var context = CreateContext();
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Original");
+        Button(page, "Create deck").Click();
+        page.Find(".editor label input").Change(" ");
+        Assert.Contains("previous name was restored", page.Markup);
+        Assert.Equal("Original", Assert.Single(SavedDecks(context)).Name);
+
+        page.Find(".editor label input").Change(new string('X', 161));
+        Assert.Equal("Original", Assert.Single(SavedDecks(context)).Name);
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();
