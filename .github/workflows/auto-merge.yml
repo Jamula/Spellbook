@@ -1,0 +1,39 @@
+name: Enable auto-merge
+
+# This privileged workflow only uses GitHub's API. Never check out or execute PR code here.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable:
+    name: Enable squash auto-merge
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+    steps:
+      - name: Enable native auto-merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          decision=$(gh api graphql \
+            -f query='query($id: ID!) { node(id: $id) { ... on PullRequest { state isDraft autoMergeRequest { enabledAt } } } }' \
+            -f id="$PR_NODE_ID" \
+            --jq '.data.node | if .state == "OPEN" and .isDraft == false and .autoMergeRequest == null then "enable" else "skip" end')
+          if [ "$decision" != "enable" ]; then
+            echo "PR is closed, draft, or already configured for auto-merge."
+            exit 0
+          fi
+          gh api graphql \
+            -f query='mutation($id: ID!) { enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) { pullRequest { number autoMergeRequest { enabledAt } } } }' \
+            -f id="$PR_NODE_ID"
