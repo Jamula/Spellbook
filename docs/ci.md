@@ -1,9 +1,22 @@
 # CI checks
 
-`Build Spellbook` runs once per pull request update and on pushes to `main`.
+`Build Spellbook` runs once per pull request update and on pushes to `main`, and
+supports an explicit main-branch dispatch for recovery.
 Feature-branch pushes do not run a second copy of the same workflow. Pushes to
 `main` still publish the deployable site artifact and establish the default-branch
 coverage baseline. Superseded runs for the same PR or ref are cancelled.
+
+GitHub suppresses push workflows after some `GITHUB_TOKEN` auto-merges (#36).
+`Reconcile main CI` runs trusted main metadata tooling after relevant workflow
+completions and every 15 minutes. It lets normal push CI appear first and
+only dispatches if the current main SHA has no push/dispatch run. Existing
+failures need explicit reruns. It never executes triggering PR code or relabels
+PR coverage as main. GitHub's documented dispatch exception needs no new token.
+The pinned coverage action's `resolve_upload_context.py` fallback uses real
+dispatch `GITHUB_SHA` and `GITHUB_REF` (`refs/heads/main`) directly in the coverage
+API; no event or PR context is fabricated. Scheduled jobs can be delayed. A rare
+simultaneous-push race can queue two runs; per-ref concurrency allows one active
+main validation.
 
 The required check names are unchanged:
 
@@ -75,5 +88,6 @@ minutes; process dumps are disabled, and the job has a separate 15-minute limit.
 `spellbook-coverage` retains raw Cobertura and TRX diagnostics for 14 days even
 if the test or coverage gate fails, provided files were produced. The original
 test command's failed status is preserved. The static site artifact also lasts
-14 days; longer-lived release artifacts belong to the Phase2 release process.
+14 days and contains a manifest-backed ZIP and checksum. Permanent immutable
+release assets and production/rollback controls are in [releases.md](releases.md).
 The existing coverage threshold and GitHub coverage upload remain enforced.

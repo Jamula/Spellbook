@@ -1,0 +1,89 @@
+name: Prepare release candidate
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful main Build Spellbook run ID (artifact must not have expired)
+        required: true
+        type: string
+      version:
+        description: New SemVer tag, e.g. v0.1.0-rc.1
+        required: true
+        type: string
+
+concurrency:
+  group: release-candidate
+  cancel-in-progress: false
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_RUN: ${{ inputs.run_id }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check out trusted release tooling only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify successful main build and security gates
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$SOURCE_RUN" > run.json
+          sha=$(jq -r .head_sha run.json)
+          [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
+          bash .github/release-tools/security-evidence.sh "$sha"
+          python3 .github/release-tools/release.py candidate run.json security-evidence.json "$VERSION"
+          if gh api "repos/$GH_REPO/git/ref/tags/$VERSION" >/dev/null 2>&1; then
+            echo 'Version tag already exists; release versions cannot be overwritten.' >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Download existing tested artifact (never rebuild)
+        run: gh run download "$SOURCE_RUN" --name spellbook-site --dir release-bundle
+      - name: Verify and extract exact artifact
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          cd release-bundle
+          sha256sum --check SHA256SUMS
+          cd ..
+          python3 .github/release-tools/release.py verify release-bundle/spellbook-site.zip "$SOURCE_SHA" --destination .github/release-site
+          test "$(jq -r .run_id .github/release-site/release-manifest.json)" = "$SOURCE_RUN"
+      - name: Install locked browser smoke dependency
+        working-directory: .github/release-tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install Chromium
+        working-directory: .github/release-tools
+        run: npx playwright install --with-deps chromium
+      - name: Smoke exact candidate with saved browser data
+        working-directory: .github/release-tools
+        run: npx playwright test
+      - name: Record candidate evidence and create draft release
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'Commit: `%s`\n\n' "$SOURCE_SHA"
+            printf 'CI and coverage: https://github.com/%s/actions/runs/%s\n\n' "$GH_REPO" "$SOURCE_RUN"
+            printf 'Browser smoke: saved v1 data, edit/reload, quantity, JSON export, create/delete passed.\n\n'
+            printf 'Smoke evidence: https://github.com/%s/actions/runs/%s\n\n' "$GH_REPO" "$GITHUB_RUN_ID"
+            printf 'No production promotion has occurred. Review changes, preview URL, Safari checks, data compatibility and docs/releases.md before publishing.\n'
+          } > release-bundle/evidence.md
+          gh release create "$VERSION" release-bundle/spellbook-site.zip release-bundle/SHA256SUMS release-bundle/evidence.md \
+            --target "$SOURCE_SHA" --title "$VERSION" --draft --generate-notes --notes-file release-bundle/evidence.md

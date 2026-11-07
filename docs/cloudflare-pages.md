@@ -9,7 +9,7 @@ dotnet restore Spellbook/Spellbook.csproj
 dotnet publish Spellbook/Spellbook.csproj -c Release -o publish
 ```
 
-The deployable files are under `publish/wwwroot`. The GitHub Actions **Build Spellbook** workflow produces the `spellbook-site` artifact with the same contents.
+The deployable files are under `publish/wwwroot`. The GitHub Actions **Build Spellbook** workflow produces `spellbook-site`, containing a ZIP of those exact files plus integrity metadata. See [releases.md](releases.md) for extraction and production controls.
 
 ## Create a free Pages project
 
@@ -25,6 +25,10 @@ npx wrangler pages deploy publish/wwwroot --project-name spellbook
 Cloudflare should return a `*.pages.dev` deployment address. Project setup and deployment have **not** been performed by this document.
 
 ## Optional automated deployment
+
+The existing project uses Git integration for previews. The owner-reviewed
+activation plan in [releases.md](releases.md) supersedes automatic main-to-production
+deployment; do not add another production job or retain a competing Git path.
 
 When the Pages project exists and the user chooses to automate releases, create a narrowly scoped Cloudflare API token and save it as a GitHub Actions secret named `CLOUDFLARE_API_TOKEN`. Set `CLOUDFLARE_ACCOUNT_ID` as a repository variable. Have the workflow publish and upload `publish/wwwroot` using Wrangler; do not put secrets in a Blazor client app or repository.
 

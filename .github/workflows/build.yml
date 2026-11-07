@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # One active validation per PR/ref; an updated commit supersedes older work.
 concurrency:
@@ -14,6 +15,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,6 +29,8 @@ jobs:
           cache-dependency-path: Spellbook/packages.lock.json
       - name: Restore
         run: dotnet restore Spellbook/Spellbook.csproj --locked-mode
+      - name: Verify release safety contracts
+        run: python3 -m unittest discover -s .github/release-tools -p 'test_*.py' -v
       - name: Build
         run: dotnet build Spellbook/Spellbook.csproj --configuration Release --no-restore --warnaserror
       - name: Publish static site
@@ -53,16 +57,22 @@ jobs:
           assert 'rel="manifest"' in index
           assert 'apple-mobile-web-app-title' in index
           PY
+      - name: Package exact build with integrity metadata
+        env:
+          COMMIT: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: python3 .github/release-tools/release.py package publish/wwwroot release-bundle "$COMMIT" "$RUN_ID"
       - name: Upload static site
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: spellbook-site
-          path: publish/wwwroot
+          path: release-bundle
           if-no-files-found: error
           retention-days: 14
 
   coverage:
     name: Test coverage
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
