@@ -60,14 +60,13 @@ public static partial class DeckListCodec
             // Archidekt text includes categories in brackets; only recognized board names change zones.
             var taggedZones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (sideboardPrefix) taggedZones.Add("Sideboard");
-            while (TrailingTag().IsMatch(name))
+            var nameEnd = name.Length;
+            while (TryTakeTrailingTag(name, ref nameEnd, out var category))
             {
-                var tag = TrailingTag().Match(name);
-                var category = tag.Groups[1].Value;
                 if (Zones.TryGetValue(category, out zone)) taggedZones.Add(zone);
                 else warnings.Add("Non-board categories and tags are omitted; review the imported cards and zones.");
-                name = name[..tag.Index].Trim();
             }
+            name = name[..nameEnd].Trim();
             if (taggedZones.Count > 1)
                 throw new InvalidDataException($"Line {number}: conflicting board tags; choose one board before importing.");
             rowSection = taggedZones.FirstOrDefault() ?? rowSection;
@@ -149,6 +148,27 @@ public static partial class DeckListCodec
         }
         else deck.Cards.Add(new DeckCard { Name = name, Quantity = count, Section = section });
         if (deck.Cards.Count > 1000) throw new InvalidDataException("A deck can contain at most 1,000 distinct card entries.");
+    }
+
+    private static bool TryTakeTrailingTag(string value, ref int end, out string category)
+    {
+        category = string.Empty;
+        if (end < 2 || value[end - 1] != ']') return false;
+
+        var segmentStart = value.LastIndexOf(']', end - 2) + 1;
+        for (var open = segmentStart + 1; open < end - 1; open++)
+        {
+            if (value[open] != '[' || !char.IsWhiteSpace(value[open - 1])) continue;
+
+            var start = open - 1;
+            while (start > segmentStart && char.IsWhiteSpace(value[start - 1])) start--;
+            category = value[(open + 1)..(end - 1)];
+            end = start;
+            while (end > 0 && char.IsWhiteSpace(value[end - 1])) end--;
+            return true;
+        }
+
+        return false;
     }
 
     public static string ExportText(Deck deck)

@@ -46,6 +46,16 @@ public sealed class DeckListCodecTests
         Assert.Equal(section, Assert.Single(DeckListCodec.Parse($"1 Opt {tags}", "Aliases").Deck.Cards).Section);
 
     [Fact]
+    public void TextParsesManyTrailingCategoryTags()
+    {
+        var text = "1 Opt" + string.Concat(Enumerable.Repeat(" [Ramp]", 5000));
+        var result = DeckListCodec.Parse(text, "Many tags");
+
+        Assert.Equal("Opt", Assert.Single(result.Deck.Cards).Name);
+        Assert.NotEmpty(result.Warnings);
+    }
+
+    [Fact]
     public void CsvHandlesBomQuotedCommasQuotesColumnAliasesAndCategories()
     {
         var result = DeckListCodec.Parse("\uFEFFCount,Card Name,Section\r\n2,\"Name, with \"\"quotes\"\"\",Sideboard\r\n1,Opt,\"Ramp; Mainboard\"\r\n1,Island,\r\n", "CSV");
