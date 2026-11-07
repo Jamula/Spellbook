@@ -210,6 +210,42 @@ public sealed class DeckEditorTests
     }
 
     [Fact]
+    public void NativeVideoFrameAndHeicFlowRequireExplicitConfirmation()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("blob:local-video");
+        context.JSInterop.Setup<string>("spellbookMedia.captureFrame", _ => true)
+            .SetResult("data:image/jpeg;base64,AQID");
+        context.JSInterop.Setup<string>("spellbookMedia.convertHeic", _ => true)
+            .SetResult("data:image/jpeg;base64,BAUG");
+        context.JSInterop.SetupVoid("spellbookMedia.releaseVideo", _ => true).SetVoidResult();
+
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Mobile media deck");
+        Button(page, "Create deck").Click();
+        var media = page.FindComponents<InputFile>()[1];
+
+        media.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
+        page.WaitForAssertion(() => Assert.Equal("blob:local-video",
+            page.Find("#card-video-preview").GetAttribute("src")));
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Button(page, "Capture selected video frame").Click();
+        page.WaitForAssertion(() => Assert.Equal("data:image/jpeg;base64,AQID",
+            page.Find(".scan-preview").GetAttribute("src")));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+
+        media.UploadFiles(InputFileContent.CreateFromBinary([3, 4], "photo.heic", contentType: "image/heic"));
+        page.WaitForAssertion(() => Assert.Equal("data:image/jpeg;base64,BAUG",
+            page.Find(".scan-preview").GetAttribute("src")));
+        Assert.Empty(page.FindAll("#card-video-preview"));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+        page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
+        Button(page, "Add confirmed card").Click();
+        Assert.Equal("Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name);
+    }
+
+    [Fact]
     public void PhotoPickerRejectsUnsupportedOrOversizedMediaWithoutChangingDeck()
     {
         using var context = CreateContext();
@@ -219,8 +255,8 @@ public sealed class DeckEditorTests
         Button(page, "Create deck").Click();
         var media = page.FindComponents<InputFile>()[1];
 
-        media.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
-        Assert.Contains("No supported image selected", page.Markup);
+        media.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "unsupported.xyz", contentType: "application/octet-stream"));
+        Assert.Contains("Select a JPEG, PNG", page.Markup);
         Assert.Empty(page.FindAll(".scan-preview"));
 
         media.UploadFiles(InputFileContent.CreateFromBinary(new byte[6_000_001], "big.jpg", contentType: "image/jpeg"));
@@ -229,7 +265,56 @@ public sealed class DeckEditorTests
 
         media.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "valid.webp", contentType: "image/webp"));
         Assert.Single(page.FindAll(".scan-preview"));
-        media.UploadFiles(InputFileContent.CreateFromBinary([3, 4], "unsupported.heic", contentType: "image/heic"));
+        media.UploadFiles(InputFileContent.CreateFromBinary(new byte[20_000_001], "oversize.heic", contentType: "image/heic"));
+        Assert.Contains("HEIC exceeds the 20 MB", page.Markup);
+        Assert.Empty(page.FindAll(".scan-preview"));
+
+        // Unused oversized HEIC must not reject a separately selected valid JPEG.
+        media.UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "valid.jpg", contentType: "image/jpeg"),
+            InputFileContent.CreateFromBinary(new byte[20_000_001], "unused.heic", contentType: "image/heic"));
+        page.WaitForAssertion(() => Assert.Equal("data:image/jpeg;base64,AQI=",
+            page.Find(".scan-preview").GetAttribute("src")));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+    }
+
+    [Fact]
+    public void InvalidHeicConversionAndVideoPrepareLeaveLocalDeckUnchanged()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.convertHeic", _ => true).SetResult("not-jpeg");
+        context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("not-blob");
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Media failures");
+        Button(page, "Create deck").Click();
+        var picker = page.FindComponents<InputFile>()[1];
+
+        picker.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "card.heic", contentType: "image/heic"));
+        page.WaitForAssertion(() => Assert.Contains("Media could not be processed locally", page.Markup));
+        Assert.Empty(page.FindAll(".scan-preview"));
+
+        picker.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
+        page.WaitForAssertion(() => Assert.Contains("Media could not be processed locally", page.Markup));
+        Assert.Empty(page.FindAll("#card-video-preview"));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+    }
+
+    [Fact]
+    public void InvalidVideoFrameCaptureCanBeRetriedWithoutAddingCard()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("blob:review");
+        context.JSInterop.Setup<string>("spellbookMedia.captureFrame", _ => true).SetResult("not-jpeg");
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Frame retry");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("#card-video-preview")));
+        Button(page, "Capture selected video frame").Click();
+        page.WaitForAssertion(() => Assert.Contains("Could not capture this frame", page.Markup));
         Assert.Empty(page.FindAll(".scan-preview"));
         Assert.Empty(SavedDecks(context)[0].Cards);
     }
@@ -511,6 +596,44 @@ public sealed class DeckEditorTests
         });
         await page.InvokeAsync(() => Button(page, "Add").Click());
         page.WaitForAssertion(() => Assert.Equal("Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Theory]
+    [InlineData("Avacyn, Angel of Hope 5WWW\\nLegendary Creature", "Avacyn, Angel of Hope")]
+    [InlineData("Lightning Bolt {R}\\nInstant", "Lightning Bolt")]
+    [InlineData("Niv-Mizzet, Parun UURRR", "Niv-Mizzet, Parun")]
+    [InlineData("Seven Dwarves", "Seven Dwarves")]
+    [InlineData("2020 Vision", "2020 Vision")]
+    public void OcrTitleExtractorRemovesRecognizableManaSuffixOnly(string recognized, string expected)
+    {
+        Assert.Equal(expected, CardTitleExtractor.FromOcr(recognized.Replace("\\n", "\n")));
+    }
+
+    [Fact]
+    public void ScanIsDistinctAndVerifiedCardLinksToCanonicalScryfall()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
+            .SetResult(new ScryfallCard
+            {
+                Name = "Avacyn, Angel of Hope",
+                ScryfallUrl = "https://scryfall.com/card/avr/6/avacyn-angel-of-hope",
+                ManaValue = 8
+            });
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Card links");
+        Button(page, "Create deck").Click();
+        Assert.Single(page.FindAll("section.card-scan-panel[aria-label='Scan a card']"));
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1], "card.png", contentType: "image/png"));
+        page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
+        Button(page, "Verify against Scryfall").Click();
+        page.WaitForAssertion(() => Assert.Equal(
+            "https://scryfall.com/card/avr/6/avacyn-angel-of-hope",
+            page.Find(".verified-card a").GetAttribute("href")));
+        Button(page, "Add confirmed card").Click();
+        Assert.Contains("scryfall.com/search?q=", page.Find(".card-row a").GetAttribute("href"));
     }
 
     private static BunitContext CreateContext(string? storedJson = null)
