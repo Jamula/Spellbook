@@ -300,12 +300,13 @@ public sealed class DeckEditorTests
             timeout: TimeSpan.FromSeconds(4));
         Assert.Empty(SavedDecks(context)[0].Cards);
         page.Find("[aria-label='Card name']").Change("Lightning Bolt");
+        page.WaitForAssertion(() => Assert.Equal("Lightning Bolt", page.Find("[aria-label='Card name']").GetAttribute("value")));
         Button(page, "Add").Click();
-        Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name);
+        page.WaitForAssertion(() => Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name));
 
         page.Find("[aria-label='Card name']").Change("My custom offline card");
         Button(page, "Add").Click();
-        Assert.Contains(SavedDecks(context)[0].Cards, card => card.Name == "My custom offline card");
+        page.WaitForAssertion(() => Assert.Contains(SavedDecks(context)[0].Cards, card => card.Name == "My custom offline card"));
     }
 
     private static BunitContext CreateContext(string? storedJson = null)
