@@ -121,6 +121,7 @@ else
             return;
         }
         var deck = new Deck { Name = newDeckName.Trim() };
+        ClearScan();
         decks.Add(deck); selected = deck; lastSavedName = deck.Name; newDeckName = "";
         await Persist();
     }
@@ -128,6 +129,7 @@ else
     private async Task DeleteDeck()
     {
         if (selected is null) return;
+        ClearScan();
         decks.Remove(selected); selected = decks.FirstOrDefault(); lastSavedName = selected?.Name ?? "";
         await Persist();
     }
@@ -178,6 +180,7 @@ else
             using var reader = new StreamReader(stream);
             var recovered = Store.ParseImport(await reader.ReadToEndAsync());
             await Store.SaveAsync(recovered);
+            ClearScan();
             decks = recovered;
             selected = decks.FirstOrDefault();
             lastSavedName = selected?.Name ?? "";
@@ -201,6 +204,7 @@ else
             using var reader = new StreamReader(stream);
             var imported = Store.ParseImport(await reader.ReadToEndAsync());
             foreach (var d in imported) d.Id = Guid.NewGuid();
+            if (imported.Count > 0) ClearScan();
             decks.AddRange(imported); selected = imported.FirstOrDefault() ?? selected; lastSavedName = selected?.Name ?? "";
             await Persist(); message = $"Imported {imported.Count} deck(s).";
         }
