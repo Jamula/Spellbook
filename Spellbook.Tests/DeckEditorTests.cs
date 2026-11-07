@@ -462,6 +462,32 @@ public sealed class DeckEditorTests
         page.WaitForAssertion(() => Assert.Equal("Island", Assert.Single(SavedDecks(context)[0].Cards).Name));
     }
 
+
+    [Fact]
+    public void ShortScryfallQueriesAreNotSentAndEmptySearchesKeepManualEntry()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult([]);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("No matches");
+        Button(page, "Create deck").Click();
+        page.Find("[aria-label='Card name']").Input("A");
+        Assert.DoesNotContain(context.JSInterop.Invocations,
+            i => i.Identifier == "spellbookScryfall.autocomplete");
+
+        page.Find("[aria-label='Card name']").Input("Avacy");
+        page.WaitForAssertion(() => Assert.Contains("No suggestions", page.Markup),
+            timeout: TimeSpan.FromSeconds(4));
+        Assert.Empty(page.FindAll(".card-suggestions"));
+
+        page.Find("[aria-label='Card name']").Change("Avacyn, Angel of Hope");
+        Button(page, "Add").Click();
+        page.WaitForAssertion(() => Assert.Equal(
+            "Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();
