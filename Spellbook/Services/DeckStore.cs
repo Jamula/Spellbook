@@ -14,11 +14,15 @@ public sealed class DeckStore(IJSRuntime js)
         try
         {
             var json = await js.InvokeAsync<string?>("spellbookStorage.get", Key);
-            return string.IsNullOrWhiteSpace(json) ? [] : ParseImport(json);
+            return string.IsNullOrWhiteSpace(json) ? [] :
+                JsonSerializer.Deserialize<List<Deck>>(json, Options)
+                ?? throw new InvalidDataException("Saved decks could not be read.");
         }
-        catch (JSException) { return []; }
-        catch (JsonException) { return []; }
-        catch (InvalidDataException) { return []; }
+        catch (Exception ex) when (ex is JSException or JsonException or InvalidDataException)
+        {
+            // Never pretend a damaged store is empty: saving an empty collection would destroy user data.
+            throw new InvalidDataException("Saved deck data could not be loaded. Nothing has been changed. Restore a JSON backup or recover your browser data.", ex);
+        }
     }
 
     public Task SaveAsync(List<Deck> decks) =>
@@ -35,6 +39,15 @@ public sealed class DeckStore(IJSRuntime js)
         using var document = JsonDocument.Parse(json);
         if (document.RootElement.ValueKind != JsonValueKind.Array)
             throw new InvalidDataException("Expected a JSON array of decks.");
+
+        // JSON deserialization supplies default property values, so inspect the raw document
+        // before deserializing to reject omitted required names instead of silently inventing them.
+        foreach (var rawDeck in document.RootElement.EnumerateArray())
+        {
+            if (rawDeck.ValueKind != JsonValueKind.Object ||
+                !rawDeck.EnumerateObject().Any(p => string.Equals(p.Name, "name", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("Every deck in a backup must specify a name.");
+        }
 
         var data = JsonSerializer.Deserialize<List<Deck>>(json, Options)
             ?? throw new InvalidDataException("Invalid deck file.");
