@@ -13,11 +13,13 @@ Source for a **separate** free Cloudflare Pages static site. This site is not th
 
 On 2026-11-07, the issue recorded successful deployment to `jamula-links.pages.dev` and Cloudflare API confirmation that both custom domains, DNS verification and SSL validation were active. The deployment parsed one valid redirect rule. Do not recreate the project or repeat the DNS migration solely because the original issue is still open.
 
-**Final public verification remains outstanding.** On 2026-11-07, the managed development environment's enforced network policy rejected HTTPS requests to the branded hosts, Pages hosts and Bitly with proxy tunnel HTTP 403. Local DNS resolution also failed in that environment. These results do not establish whether public DNS or the deployed links are working.
+**Public DNS and HTTP verification completed on 2026-11-07.** Google Public DNS returned `jamula-links.pages.dev.` for the CNAME records of both branded domains. Requests to `https://jamula-links.pages.dev/spellbook`, `https://s.jamula.net/spellbook`, and `https://s.jamula.com/spellbook` returned HTTP 302 with `Location: https://spellbook-ag4.pages.dev/`; following either branded link reached the app with HTTP 200. The direct app URL also returned HTTP 200. These checks are recorded in #17.
 
-## Complete the public checks
+The existing Bitly URLs `/sp3llbook` and `/4iLdcq5` currently return an HTTP 200 Bitly warning page that says the links were blocked as potentially harmful; neither redirects to Spellbook. Do not describe these links as working fallbacks. A physical desktop and iPhone Safari check and an owner decision on the blocked fallback remain open in #17.
 
-Run these checks from a network that permits the hosts, or allow the five hosts below in the development environment's outbound network settings. No provider credential or paid API is needed for these public checks.
+## Repeat the public checks
+
+Run these checks from a network that permits the hosts when a fresh check is needed. No provider credential or paid API is needed for these public checks.
 
 ```bash
 dig +short CNAME s.jamula.net
@@ -48,18 +50,18 @@ Expected results:
 | Branded DNS | For the recorded external Namecheap CNAME setup, target `jamula-links.pages.dev.`; flattened or proxied DNS may instead expose A/AAAA answers (see below) |
 | All three `/spellbook` responses | HTTP 302; `Location: https://spellbook-ag4.pages.dev/`; valid HTTPS without disabling certificate checks |
 | Destination | HTTP 200 and the Spellbook application loads |
-| Existing Bitly fallback | Still redirects to the intended Spellbook destination; preserve it |
+| Existing Bitly links | Bitly currently serves a blocked-link warning page; do not claim they redirect successfully. Keep the direct Spellbook URL available and record an owner-approved fallback decision in #17 |
 
 An empty `dig CNAME` answer alone is not a failure. DNS flattening or proxying can return valid A/AAAA answers instead. Check those answers, the HTTPS results and the DNS provider's actual record configuration together with Pages custom-domain status. Verify the existing Pages project's assigned target before proposing any record change; do not infer a required IP address from a transient address answer.
 
-Then open both branded `/spellbook` links in desktop and iPhone Safari, confirm that Spellbook loads, and record the dated results in #17 before closing it. If a fallback returns an interstitial or an unexpected target, record the actual result rather than treating any 302 as success. The issue also records `https://bit.ly/4iLdcq5` as an earlier fallback; leave existing Bitly links intact.
+Then open both branded `/spellbook` links in desktop and iPhone Safari, confirm that Spellbook loads, and record the dated results in #17 before closing it. If a fallback returns an interstitial or an unexpected target, record the actual result rather than treating an HTTP 200 as success. The issue also records `https://bit.ly/4iLdcq5` as an earlier fallback; do not remove or advertise either Bitly URL as working until its status is resolved.
 
 ## Diagnose a failed check
 
 1. Compare the deployed Pages `/spellbook` response with the two custom-domain responses. If Pages itself fails, inspect the latest `jamula-links` deployment and its parsed `_redirects` rules before changing DNS.
 2. In Pages > Custom domains, inspect **both** `s.jamula.net` and `s.jamula.com`. Confirm their current DNS and certificate status, and compare the DNS provider's configured records with any flattening/proxy behavior. A missing public CNAME with working address resolution and HTTPS does not justify replacing records. These are subdomains recorded as using external Namecheap DNS; no nameserver migration is needed.
 3. If the combined DNS, HTTPS and provider-status checks establish an incorrect configuration, verify the current required CNAME in the existing Pages project first. The assigned target recorded in #17 is `jamula-links.pages.dev`. Only after verification and owner authorization, correct the `s` CNAME in the affected zone. Do not restore `cname.bitly.com` for this Pages-hosted link, create competing records, or change MX, nameservers or unrelated records.
-4. Wait for DNS propagation and certificate activation, then repeat the public checks. Keep the working fallback available throughout troubleshooting.
+4. Wait for DNS propagation and certificate activation, then repeat the public checks. Keep the direct app URL available throughout troubleshooting.
 
 Changes to redirect destinations should remain focused issue-linked PRs. Verify the Pages response and both branded links after deployment; retain 302 redirects while destinations are being validated.
 
