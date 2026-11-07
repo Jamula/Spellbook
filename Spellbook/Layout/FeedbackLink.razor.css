@@ -1,0 +1,4 @@
+.feedback-section { max-width: 44rem; margin: 1rem auto 0; }
+.feedback-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .5rem .75rem; border: 1px solid currentColor; border-radius: .5rem; font-weight: 650; text-underline-offset: .2em; }
+.feedback-link:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+.feedback-notice { font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; }

@@ -1,0 +1,32 @@
+<section class="feedback-section" aria-label="Feedback">
+    <a class="feedback-link" href="@FeedbackUrl" target="_blank" rel="noopener noreferrer"
+       aria-describedby="feedback-notice" aria-label="Send feedback on GitHub (opens in a new tab)">Send feedback ↗</a>
+    <p id="feedback-notice" class="feedback-notice">Opens GitHub in a new tab. GitHub sign-in is required to submit; issues are public. No deck data or device details are included automatically. Review your message before submitting.</p>
+</section>
+
+@code {
+    private static readonly string FeedbackUrl =
+        "https://github.com/Jamula/Spellbook/issues/new?title=" + Uri.EscapeDataString("[Feedback] Describe your request or bug") +
+        "&body=" + Uri.EscapeDataString("""
+            ## What happened or what would you like?
+            
+            Describe the bug or feature request here.
+            
+            ## Steps to reproduce (for bugs)
+            
+            1. 
+            2. 
+            3. 
+            
+            ## Expected result
+            
+            ## Actual result
+            
+            ## Environment (optional — fill in manually)
+            
+            - Browser and version:
+            - Device / operating system:
+            
+            This issue will be public. Do not include passwords, tokens, personal information, or private deck data. Nothing from your decks or browser storage has been attached automatically.
+            """);
+}
