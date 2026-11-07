@@ -89,6 +89,8 @@ jobs:
             Spellbook.Tests/packages.lock.json
       - name: Restore tests and application
         run: dotnet restore Spellbook.Tests/Spellbook.Tests.csproj --locked-mode
+      - name: Test Cloudflare feedback security boundary
+        run: node --test tests/feedback-worker.test.mjs
       - name: Test with Cobertura coverage
         id: tests
         run: >-
