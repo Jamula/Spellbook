@@ -15,7 +15,8 @@ total, executed, passed, failed, skipped = (
     int(counters.attrib[name])
     for name in ("total", "executed", "passed", "failed", "notExecuted")
 )
-if not (0 <= passed <= executed <= total and 0 <= failed <= executed and 0 <= skipped <= total):
+if not (0 <= passed <= executed <= total and 0 <= failed <= executed
+        and passed + failed <= executed and 0 <= skipped <= total - executed):
     sys.exit("TRX report contains inconsistent test counters.")
 
 summary = (
@@ -33,5 +34,5 @@ if os.environ.get("GITHUB_STEP_SUMMARY"):
 
 if total == 0 or executed == 0:
     sys.exit("No tests executed; this does not validate the application.")
-if passed != executed or any(int(counters.get(k, "0")) for k in ("error", "timeout", "aborted")):
+if failed or passed != executed or any(int(counters.get(k, "0")) for k in ("error", "timeout", "aborted")):
     sys.exit("The test run did not complete successfully; inspect the TRX artifact.")
