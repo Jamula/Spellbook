@@ -61,7 +61,7 @@ else
                             <button @onclick="ReadPhoto" disabled="@mediaBusy">@(mediaBusy ? "Reading photo…" : "Recognize text on device")</button>
                             <button class="secondary" @onclick="ClearScan" disabled="@mediaBusy">Clear photo</button>
                             <label>Card name (confirm or correct)
-                                <input aria-label="Name from photo" maxlength="200" @bind="candidateName" />
+                                <input aria-label="Name from photo" maxlength="200" @bind="candidateName" disabled="@mediaBusy" />
                             </label>
                             <button @onclick="ConfirmScannedCard" disabled="@mediaBusy">Add confirmed card</button>
                             @if (!string.IsNullOrWhiteSpace(recognizedText))
@@ -237,8 +237,9 @@ else
             previewDataUrl = $"data:{image.ContentType};base64,{Convert.ToBase64String(buffer.ToArray())}";
             mediaMessage = "Preview ready. Recognition is optional, and nothing is added until you confirm.";
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or JSException)
         {
+            if (generation != scanGeneration) return;
             previewDataUrl = null;
             mediaMessage = "Could not read the photo on this device. Try a smaller image.";
         }
