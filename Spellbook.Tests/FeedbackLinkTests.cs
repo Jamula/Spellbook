@@ -91,6 +91,11 @@ public sealed class FeedbackLinkTests
         page.Find(".feedback-actions button:last-child").Click();
         page.WaitForAssertion(() => Assert.Contains("could not be submitted", page.Markup));
         Assert.Equal("Card scan incorrect", page.Find("#feedback-subject").GetAttribute("value"));
-        Assert.Contains("printed mana cost", ((AngleSharp.Html.Dom.IHtmlTextAreaElement)page.Find("#feedback-details")).Value);
+        var prior = Assert.Single(context.JSInterop.Invocations["spellbookFeedback.submit"]);
+        Assert.Contains("printed mana cost", Assert.IsType<string>(prior.Arguments[2]));
+        // Retry with no new typing: the component must retain the edited text.
+        page.Find(".feedback-actions button:last-child").Click();
+        Assert.Equal(2, context.JSInterop.Invocations["spellbookFeedback.submit"].Count);
+        Assert.Equal(prior.Arguments[2], context.JSInterop.Invocations["spellbookFeedback.submit"].Last().Arguments[2]);
     }
 }
