@@ -355,7 +355,7 @@ public sealed class DeckEditorTests
     public void ExactScryfallLookupWithoutMatchNeverAutomaticallyAddsCard()
     {
         using var context = CreateContext();
-        context.JSInterop.Mode = Bunit.JSInterop.JSRuntimeMode.Loose;
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
         var page = context.Render<Home>();
         page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
         page.Find("[aria-label='New deck name']").Change("Verify manually");
