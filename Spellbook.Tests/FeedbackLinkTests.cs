@@ -41,6 +41,7 @@ public sealed class FeedbackLinkTests
         var page = context.Render<FeedbackLink>();
         page.Find(".feedback-link").Click();
         Assert.Contains("not configured yet", page.Markup);
+        Assert.Equal("https://github.com/Jamula/Spellbook/issues/new", page.Find("a[href*=\"/issues/new\"]").GetAttribute("href"));
         page.Find("#feedback-subject").Input("Hi");
         page.Find("#feedback-details").Input("short");
         page.Find(".feedback-actions button:last-child").Click();
