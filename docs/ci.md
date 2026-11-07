@@ -1,9 +1,24 @@
 # CI checks
 
-`Build Spellbook` runs once per pull request update and on pushes to `main`.
+`Build Spellbook` runs once per pull request update and on pushes to `main`, and
+supports an explicit main-branch dispatch for recovery.
 Feature-branch pushes do not run a second copy of the same workflow. Pushes to
 `main` still publish the deployable site artifact and establish the default-branch
 coverage baseline. Superseded runs for the same PR or ref are cancelled.
+
+GitHub suppresses push workflows after some `GITHUB_TOKEN` auto-merges (#36).
+`Reconcile main CI` runs trusted main metadata tooling after relevant workflow
+completions and every 15 minutes. It lets normal push CI appear first and
+only dispatches if the current main SHA has no push/dispatch run. Existing
+failures need explicit reruns. It never executes triggering PR code or relabels
+PR coverage as main. GitHub's documented dispatch exception needs no new token.
+The pinned coverage action's `resolve_upload_context.py` fallback uses real
+dispatch `GITHUB_SHA` and `GITHUB_REF` (`refs/heads/main`) directly in the coverage
+API; no event or PR context is fabricated. Scheduled jobs can be delayed. A rare
+simultaneous-push race can queue two runs; per-ref concurrency allows one active
+main validation. Recovery validates latest main rather than building every
+historical SHA skipped by bot events. Scheduled workflows may be disabled by
+GitHub after 60 days of repository inactivity; explicit dispatch remains available.
 
 The required check names are unchanged:
 
