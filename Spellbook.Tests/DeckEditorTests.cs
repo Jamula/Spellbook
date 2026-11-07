@@ -284,6 +284,31 @@ public sealed class DeckEditorTests
         Assert.Equal("Imported deck", page.Find("h2").TextContent);
     }
 
+    [Fact]
+    public void ScryfallAutocompleteProvidesSuggestionsButManualEntryRemainsPossible()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult(["Lightning Bolt", "Lightning Helix"]);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Scryfall deck");
+        Button(page, "Create deck").Click();
+
+        page.Find("[aria-label='Card name']").Input("Lightn");
+        page.WaitForAssertion(() => Assert.Contains("Lightning Bolt", page.Find(".card-suggestions").TextContent),
+            timeout: TimeSpan.FromSeconds(4));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+        Button(page, "Lightning Bolt").Click();
+        Assert.Empty(page.FindAll(".card-suggestions"));
+        Button(page, "Add").Click();
+        Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name);
+
+        page.Find("[aria-label='Card name']").Change("My custom offline card");
+        Button(page, "Add").Click();
+        Assert.Contains(SavedDecks(context)[0].Cards, card => card.Name == "My custom offline card");
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();
