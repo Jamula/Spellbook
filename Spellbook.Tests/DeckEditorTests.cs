@@ -558,7 +558,7 @@ public sealed class DeckEditorTests
     [InlineData("2020 Vision", "2020 Vision")]
     public void OcrTitleExtractorRemovesRecognizableManaSuffixOnly(string recognized, string expected)
     {
-        Assert.Equal(expected, CardTitleExtractor.FromOcr(recognized.Replace("\\\\n", "\\n")));
+        Assert.Equal(expected, CardTitleExtractor.FromOcr(recognized.Replace("\\n", "\n")));
     }
 
     [Fact]
