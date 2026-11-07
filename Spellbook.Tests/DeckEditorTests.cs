@@ -253,6 +253,37 @@ public sealed class DeckEditorTests
         Assert.Equal("Island", Assert.Single(SavedDecks(context)[0].Cards).Name);
     }
 
+    [Fact]
+    public void SwitchingDecksByCreationDeletionOrImportDiscardsPendingPhoto()
+    {
+        using var context = CreateContext();
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Initial");
+        Button(page, "Create deck").Click();
+        var picker = page.FindComponents<InputFile>()[1];
+        picker.UploadFiles(InputFileContent.CreateFromBinary([1], "initial.jpg", contentType: "image/jpeg"));
+        Assert.Single(page.FindAll(".scan-preview"));
+
+        page.Find("[aria-label='New deck name']").Change("Next deck");
+        Button(page, "Create deck").Click();
+        Assert.Empty(page.FindAll(".scan-preview"));
+
+        picker.UploadFiles(InputFileContent.CreateFromBinary([2], "next.jpg", contentType: "image/jpeg"));
+        Assert.Single(page.FindAll(".scan-preview"));
+        Button(page, "Delete deck").Click();
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Assert.Equal("Initial", page.Find("h2").TextContent);
+
+        picker.UploadFiles(InputFileContent.CreateFromBinary([3], "third.jpg", contentType: "image/jpeg"));
+        Assert.Single(page.FindAll(".scan-preview"));
+        var imported = new Deck { Name = "Imported deck" };
+        page.FindComponents<InputFile>()[0].UploadFiles(
+            InputFileContent.CreateFromText(JsonSerializer.Serialize(new[] { imported }), "new.json"));
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Assert.Equal("Imported deck", page.Find("h2").TextContent);
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();
