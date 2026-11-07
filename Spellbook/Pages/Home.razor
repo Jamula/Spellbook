@@ -39,8 +39,18 @@ else
                 <label>Deck name<input maxlength="160" @bind="selected.Name" @bind:after="Persist" /></label>
                 <label>Game format<select @bind="selected.Format" @bind:after="Persist"><option>Casual 60-card</option><option>Two-Headed Giant</option><option>Standard</option><option>Modern</option><option>Commander</option><option>Other</option></select></label>
                 <h3>Add a card</h3>
-                <div class="toolbar"><input aria-label="Card name" placeholder="Exact card name" @bind="cardName" @onkeydown="HandleEnter" /><input class="qty" type="number" min="1" max="250" aria-label="Quantity" @bind="quantity" /><button @onclick="AddCard">Add</button></div>
-                <p class="muted">Use the printed card name. Card recognition and automatic lookup are coming later.</p>
+                <div class="toolbar"><input aria-label="Card name" placeholder="Search Magic cards" @bind="cardName" @oninput="CardTyping" @onkeydown="HandleEnter" autocomplete="off" /><input class="qty" type="number" min="1" max="250" aria-label="Quantity" @bind="quantity" /><button @onclick="AddCard">Add</button></div>
+                @if (suggestions.Count > 0)
+                {
+                    <div class="card-suggestions" aria-label="Card suggestions">
+                        @foreach (var name in suggestions)
+                        {
+                            <button class="card-suggestion" @onclick="() => ChooseSuggestion(name)">@name</button>
+                        }
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(searchMessage)) { <p class="muted" role="status">@searchMessage</p> }
+                <p class="muted">Suggestions powered by <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer">Scryfall</a>. Typing sends only your search text to Scryfall. Manual entry works offline.</p>
                 <h3>Main deck · @selected.CardCount cards</h3>
                 <div class="card-rows">
                 @foreach (var card in selected.Cards.OrderBy(c => c.Name).ToList())
@@ -61,8 +71,20 @@ else
                             <button @onclick="ReadPhoto" disabled="@mediaBusy">@(mediaBusy ? "Reading photo…" : "Recognize text on device")</button>
                             <button class="secondary" @onclick="ClearScan" disabled="@mediaBusy">Clear photo</button>
                             <label>Card name (confirm or correct)
-                                <input aria-label="Name from photo" maxlength="200" @bind="candidateName" disabled="@mediaBusy" />
+                                <input aria-label="Name from photo" maxlength="200" @bind="candidateName" @oninput="InvalidateScanVerification" disabled="@mediaBusy" />
                             </label>
+                            <button class="secondary" @onclick="VerifyScannedCard" disabled="@mediaBusy">Verify against Scryfall</button>
+                            @if (!string.IsNullOrEmpty(verificationMessage)) { <p role="status" class="muted">@verificationMessage</p> }
+                            @if (verifiedScan is not null)
+                            {
+                                <div class="verified-card">
+                                    @if (!string.IsNullOrEmpty(verifiedScan.ImageUrl))
+                                    {
+                                        <img alt="Scryfall image of @verifiedScan.Name" loading="lazy" src="@verifiedScan.ImageUrl" />
+                                    }
+                                    <div><strong>@verifiedScan.Name</strong><p>@verifiedScan.TypeLine · mana value @verifiedScan.ManaValue</p></div>
+                                </div>
+                            }
                             <button @onclick="ConfirmScannedCard" disabled="@mediaBusy">Add confirmed card</button>
                             @if (!string.IsNullOrWhiteSpace(recognizedText))
                             {
@@ -84,6 +106,12 @@ else
     private string lastSavedName = "";
     private string newDeckName = "";
     private string cardName = "";
+    private List<string> suggestions = [];
+    private string searchMessage = "";
+    private int searchGeneration;
+    private ScryfallCard? verifiedScan;
+    private string verificationMessage = "";
+    private string? lastVerifiedName;
     private int quantity = 1;
     private string message = "";
     private List<string> mediaNames = [];
@@ -133,13 +161,88 @@ else
         decks.Remove(selected); selected = decks.FirstOrDefault(); lastSavedName = selected?.Name ?? "";
         await Persist();
     }
+    private async Task CardTyping(ChangeEventArgs e)
+    {
+        cardName = e.Value?.ToString() ?? "";
+        var generation = ++searchGeneration;
+        suggestions.Clear();
+        searchMessage = "";
+        if (cardName.Trim().Length < 2) return;
+        try
+        {
+            await Task.Delay(350);
+            if (generation != searchGeneration) return;
+            var result = await JS.InvokeAsync<string[]>("spellbookScryfall.autocomplete", cardName.Trim());
+            if (generation != searchGeneration) return;
+            suggestions = result.Take(10).ToList();
+            searchMessage = suggestions.Count == 0 ? "No suggestions. You can still add the name manually." : "";
+        }
+        catch (JSException)
+        {
+            if (generation != searchGeneration) return;
+            searchMessage = "Scryfall is unavailable. You can enter the card manually.";
+        }
+        finally
+        {
+            if (generation == searchGeneration) await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ChooseSuggestion(string name)
+    {
+        cardName = name;
+        suggestions.Clear();
+        searchGeneration++;
+        searchMessage = "";
+    }
+
+    private void InvalidateScanVerification(ChangeEventArgs _)
+    {
+        verifiedScan = null;
+        lastVerifiedName = null;
+        verificationMessage = "";
+    }
+
+    private async Task VerifyScannedCard()
+    {
+        verifiedScan = null;
+        lastVerifiedName = null;
+        verificationMessage = "";
+        if (mediaBusy || previewDataUrl is null || string.IsNullOrWhiteSpace(candidateName)) return;
+        var lookupName = candidateName.Trim();
+        var generation = scanGeneration;
+        try
+        {
+            var result = await JS.InvokeAsync<ScryfallCard?>("spellbookScryfall.exact", lookupName);
+            if (generation != scanGeneration || !string.Equals(lookupName, candidateName.Trim(), StringComparison.Ordinal)) return;
+            verifiedScan = result;
+            lastVerifiedName = result is null ? null : lookupName;
+            verificationMessage = result is null
+                ? "No exact Scryfall match. Correct the name or add it manually."
+                : "Found on Scryfall. Compare the card image and confirm before adding.";
+        }
+        catch (JSException)
+        {
+            if (generation != scanGeneration) return;
+            verificationMessage = "Card lookup unavailable. You may still add the name manually.";
+        }
+    }
+
+    private sealed class ScryfallCard
+    {
+        public string Name { get; set; } = "";
+        public double ManaValue { get; set; }
+        public string TypeLine { get; set; } = "";
+        public string? ImageUrl { get; set; }
+    }
+
     private async Task AddCard()
     {
         if (selected is null || string.IsNullOrWhiteSpace(cardName) || quantity < 1 || quantity > 250) return;
         var existing = selected.Cards.FirstOrDefault(c => string.Equals(c.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase));
         if (existing is not null) existing.Quantity = Math.Min(250, existing.Quantity + quantity);
         else selected.Cards.Add(new DeckCard { Name = cardName.Trim(), Quantity = quantity });
-        cardName = ""; quantity = 1; await Persist();
+        cardName = ""; quantity = 1; suggestions.Clear(); searchGeneration++; await Persist();
     }
     private Task HandleEnter(KeyboardEventArgs e) => e.Key == "Enter" ? AddCard() : Task.CompletedTask;
     private async Task ChangeQuantity(DeckCard card, int delta)
@@ -284,12 +387,16 @@ else
             mediaMessage = "Enter a valid card name (1–200 characters) before adding.";
             return;
         }
-        cardName = candidateName.Trim();
+        cardName = verifiedScan is not null && string.Equals(lastVerifiedName, candidateName.Trim(), StringComparison.Ordinal)
+            ? verifiedScan.Name : candidateName.Trim();
         quantity = 1;
         await AddCard();
         mediaMessage = "Confirmed card added to the selected deck.";
         candidateName = "";
         recognizedText = "";
+        verifiedScan = null;
+        lastVerifiedName = null;
+        verificationMessage = "";
     }
 
     private void ClearScan()
@@ -299,6 +406,9 @@ else
         previewDataUrl = null;
         candidateName = "";
         recognizedText = "";
+        verifiedScan = null;
+        lastVerifiedName = null;
+        verificationMessage = "";
         mediaMessage = "";
     }
 }
