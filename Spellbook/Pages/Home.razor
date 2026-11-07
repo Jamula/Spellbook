@@ -58,54 +58,56 @@ else
                     <div class="card-row"><span><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @card.Name on Scryfall">@card.Name</a></span><div class="row-actions"><button aria-label="Decrease quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @card.Name" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
                 }
                 </div>
-                <h3>Scan a card from a photo or video</h3>
-                <p>Choose a photo, an iPhone HEIC image, or a video. For a video, scrub to the frame you want and tap Capture frame. Your media stays on this device; OCR runs locally. HEIC conversion and OCR libraries may be downloaded from a CDN on first use; media is not uploaded.</p>
-                <InputFile id="card-media-picker" OnChange="MediaSelected" accept="image/*,.heic,.heif,video/*" multiple />
-                @if (!string.IsNullOrEmpty(videoUrl))
-                {
-                    <div class="video-frame-review">
-                        <video id="card-video-preview" src="@videoUrl" controls playsinline preload="metadata" aria-label="Selected video: scrub to the frame showing the card"></video>
-                        <button @onclick="CaptureVideoFrame" disabled="@mediaBusy">Capture selected video frame</button>
-                        <p class="muted">Pause or scrub to the card's clearest frame, wait for it to load, then capture. You can capture again before confirming the card.</p>
-                    </div>
-                }
-                @if (mediaNames.Count > 0) { <p role="status">Selected: @string.Join(", ", mediaNames)</p> }
-                @if (!string.IsNullOrEmpty(mediaMessage)) { <p role="status" class="note">@mediaMessage</p> }
-                @if (!string.IsNullOrEmpty(previewDataUrl))
-                {
-                    <div class="scan-review">
-                        <img class="scan-preview" alt="Selected local card photo for review" src="@previewDataUrl" />
-                        <div class="scan-actions">
-                            <button @onclick="ReadPhoto" disabled="@mediaBusy">@(mediaBusy ? "Reading photo…" : "Recognize text on device")</button>
-                            <button class="secondary" @onclick="ClearScan" disabled="@mediaBusy">Clear photo</button>
-                            <label>Card name (confirm or correct)
-                                <input aria-label="Name from photo" maxlength="200" @bind="candidateName" @oninput="InvalidateScanVerification" disabled="@mediaBusy" />
-                            </label>
-                            <button class="secondary" @onclick="VerifyScannedCard" disabled="@mediaBusy">Verify against Scryfall</button>
-                            @if (!string.IsNullOrEmpty(verificationMessage)) { <p role="status" class="muted">@verificationMessage</p> }
-                            @if (verifiedScan is not null)
-                            {
-                                <div class="verified-card">
-                                    @if (!string.IsNullOrEmpty(verifiedScan.ImageUrl))
-                                    {
-                                        <img alt="Scryfall image of @verifiedScan.Name" loading="lazy" src="@verifiedScan.ImageUrl" />
-                                    }
-                                    <div><strong>@verifiedScan.Name</strong><p>@verifiedScan.TypeLine · mana value @verifiedScan.ManaValue</p>
-                                        @if (IsScryfallLink(verifiedScan.ScryfallUrl))
-                                        {
-                                            <a href="@verifiedScan.ScryfallUrl" target="_blank" rel="noopener noreferrer">View card on Scryfall ↗</a>
-                                        }
-                                    </div>
-                                </div>
-                            }
-                            <button @onclick="ConfirmScannedCard" disabled="@mediaBusy">Add confirmed card</button>
-                            @if (!string.IsNullOrWhiteSpace(recognizedText))
-                            {
-                                <details><summary>Review extracted text</summary><pre class="scan-text">@recognizedText</pre></details>
-                            }
+                <section class="card-scan-panel" aria-label="Scan a card">
+                    <h3>Scan a card from a photo or video</h3>
+                    <p>Choose a photo, an iPhone HEIC image, or a video. For a video, scrub to the frame you want and tap Capture frame. Your media stays on this device; OCR runs locally. HEIC conversion and OCR libraries may be downloaded from a CDN on first use; media is not uploaded.</p>
+                    <InputFile id="card-media-picker" OnChange="MediaSelected" accept="image/*,.heic,.heif,video/*" multiple />
+                    @if (!string.IsNullOrEmpty(videoUrl))
+                    {
+                        <div class="video-frame-review">
+                            <video id="card-video-preview" src="@videoUrl" controls playsinline preload="metadata" aria-label="Selected video: scrub to the frame showing the card"></video>
+                            <button @onclick="CaptureVideoFrame" disabled="@mediaBusy">Capture selected video frame</button>
+                            <p class="muted">Pause or scrub to the card's clearest frame, wait for it to load, then capture. You can capture again before confirming the card.</p>
                         </div>
-                    </div>
-                }
+                    }
+                    @if (mediaNames.Count > 0) { <p role="status">Selected: @string.Join(", ", mediaNames)</p> }
+                    @if (!string.IsNullOrEmpty(mediaMessage)) { <p role="status" class="note">@mediaMessage</p> }
+                    @if (!string.IsNullOrEmpty(previewDataUrl))
+                    {
+                        <div class="scan-review">
+                            <img class="scan-preview" alt="Selected local card photo for review" src="@previewDataUrl" />
+                            <div class="scan-actions">
+                                <button @onclick="ReadPhoto" disabled="@mediaBusy">@(mediaBusy ? "Reading photo…" : "Recognize text on device")</button>
+                                <button class="secondary" @onclick="ClearScan" disabled="@mediaBusy">Clear photo</button>
+                                <label>Card name (confirm or correct)
+                                    <input aria-label="Name from photo" maxlength="200" @bind="candidateName" @bind:event="oninput" @bind:after="ClearVerificationState" disabled="@mediaBusy" />
+                                </label>
+                                <button class="secondary" @onclick="VerifyScannedCard" disabled="@mediaBusy">Verify against Scryfall</button>
+                                @if (!string.IsNullOrEmpty(verificationMessage)) { <p role="status" class="muted">@verificationMessage</p> }
+                                @if (verifiedScan is not null)
+                                {
+                                    <div class="verified-card">
+                                        @if (!string.IsNullOrEmpty(verifiedScan.ImageUrl))
+                                        {
+                                            <img alt="Scryfall image of @verifiedScan.Name" loading="lazy" src="@verifiedScan.ImageUrl" />
+                                        }
+                                        <div><strong>@verifiedScan.Name</strong><p>@verifiedScan.TypeLine · mana value @verifiedScan.ManaValue</p>
+                                            @if (IsScryfallLink(verifiedScan.ScryfallUrl))
+                                            {
+                                                <a href="@verifiedScan.ScryfallUrl" target="_blank" rel="noopener noreferrer">View card on Scryfall ↗</a>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                                <button @onclick="ConfirmScannedCard" disabled="@mediaBusy">Add confirmed card</button>
+                                @if (!string.IsNullOrWhiteSpace(recognizedText))
+                                {
+                                    <details><summary>Review extracted text</summary><pre class="scan-text">@recognizedText</pre></details>
+                                }
+                            </div>
+                        </div>
+                    }
+                    </section>
             </section>
         }
     </div>
@@ -441,9 +443,7 @@ else
             ClearVerificationState();
             recognizedText = text.Trim();
             // OCR can mistake card names for other printed text. Every candidate must be confirmed.
-            candidateName = recognizedText.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .Select(line => line.Trim().Trim('\r'))
-                .FirstOrDefault(line => line.Length is >= 2 and <= 200) ?? "";
+            candidateName = Spellbook.Services.CardTitleExtractor.FromOcr(recognizedText);
             mediaMessage = string.IsNullOrWhiteSpace(candidateName)
                 ? "No readable card title found. Enter the card name yourself."
                 : "Review and correct the proposed card name before adding it.";
