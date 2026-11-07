@@ -29,7 +29,7 @@ The deployable static site is `publish/wwwroot`. Cloudflare Pages builds can run
 
 ## Tests and code coverage
 
-Run the persistence, import validation, export, and card-count tests with:
+Run the component workflow, persistence, import validation, export, and card-count tests with:
 
 ```bash
 dotnet test Spellbook.Tests/Spellbook.Tests.csproj -c Release --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory coverage
@@ -37,9 +37,9 @@ cp coverage/*/coverage.cobertura.xml coverage.cobertura.xml
 python3 .github/scripts/check-coverage.py coverage.cobertura.xml
 ```
 
-Use a fresh `coverage` directory for each run. Coverage measures the application assembly, including untested UI code; test code and generated build files are excluded. These unit tests use a fake browser storage boundary. They do not measure JavaScript or replace browser testing.
+Use a fresh `coverage` directory for each run. Coverage measures the application assembly, including UI code; test code and generated build files are excluded. Two bUnit component tests exercise the rendered deck editor: deck/card editing and restoration/import/export/media selection. The tests use a fake browser storage boundary. They do not measure JavaScript or replace browser testing.
 
-GitHub Actions runs the tests, enforces the repository's 5% minimum line coverage, saves a downloadable Cobertura report, and uploads it directly to GitHub's built-in coverage service. No separate service, secret, or paid API is required. Fork PRs run tests and retain the report without requesting write access to the base repository. The `Test coverage` check should be required in branch rules so merging waits for coverage upload. Coverage on `main` establishes the baseline after merge.
+GitHub Actions runs the tests, enforces an 80% minimum application line coverage, saves a downloadable Cobertura report, and uploads it directly to GitHub's built-in coverage service. No separate service, secret, or paid API is required. Fork PRs run tests and retain the report without requesting write access to the base repository. The `Test coverage` check should be required in branch rules so merging waits for coverage upload. Coverage on `main` establishes the baseline after merge.
 
 ## Cost & privacy safeguards
 - No Azure resources, paid APIs, or external services are required.
