@@ -24,10 +24,53 @@ jobs:
       - name: Publish static site
         run: dotnet publish Spellbook/Spellbook.csproj --configuration Release --no-restore --output publish
       - name: Check deployable site exists
-        run: test -f publish/wwwroot/index.html && test -f publish/wwwroot/_framework/blazor.boot.json
+        run: |
+          test -s publish/wwwroot/index.html
+          test -s publish/wwwroot/_framework/blazor.webassembly.js
       - name: Upload static site
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: spellbook-site
           path: publish/wwwroot
           if-no-files-found: error
+
+  coverage:
+    name: Test coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      code-quality: write
+      pull-requests: read
+    steps:
+      - name: Check out tested commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test with Cobertura coverage
+        run: >-
+          dotnet test Spellbook.Tests/Spellbook.Tests.csproj --configuration Release
+          --collect:"XPlat Code Coverage" --settings coverage.runsettings
+          --results-directory coverage
+      - name: Check application coverage is at least 80%
+        run: |
+          cp coverage/*/coverage.cobertura.xml coverage.cobertura.xml
+          python3 .github/scripts/check-coverage.py coverage.cobertura.xml
+      - name: Save coverage report
+        if: ${{ !cancelled() && hashFiles('coverage.cobertura.xml') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: spellbook-coverage
+          path: coverage.cobertura.xml
+          if-no-files-found: error
+      - name: Upload coverage to GitHub
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1
+        with:
+          file: coverage.cobertura.xml
+          language: C#
+          label: code-coverage/dotnet
