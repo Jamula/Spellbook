@@ -1,7 +1,13 @@
 name: Build Spellbook
 on:
   push:
+    branches: [main]
   pull_request:
+
+# One active validation per PR/ref; an updated commit supersedes older work.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
