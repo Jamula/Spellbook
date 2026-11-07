@@ -22,6 +22,11 @@ Run these checks from a network that permits the hosts, or allow the five hosts 
 ```bash
 dig +short CNAME s.jamula.net
 dig +short CNAME s.jamula.com
+# If a CNAME answer is empty, inspect address answers before drawing conclusions.
+for host in s.jamula.net s.jamula.com; do
+  dig +short A "$host"
+  dig +short AAAA "$host"
+done
 
 # Do not add --location: inspect the initial response from each short-link host.
 for host in jamula-links.pages.dev s.jamula.net s.jamula.com; do
@@ -40,18 +45,20 @@ Expected results:
 
 | Check | Required result |
 | --- | --- |
-| Both branded CNAMEs | `jamula-links.pages.dev.` (the deployed project's assigned hostname) |
+| Branded DNS | For the recorded external Namecheap CNAME setup, target `jamula-links.pages.dev.`; flattened or proxied DNS may instead expose A/AAAA answers (see below) |
 | All three `/spellbook` responses | HTTP 302; `Location: https://spellbook-ag4.pages.dev/`; valid HTTPS without disabling certificate checks |
 | Destination | HTTP 200 and the Spellbook application loads |
 | Existing Bitly fallback | Still redirects to the intended Spellbook destination; preserve it |
+
+An empty `dig CNAME` answer alone is not a failure. DNS flattening or proxying can return valid A/AAAA answers instead. Check those answers, the HTTPS results and the DNS provider's actual record configuration together with Pages custom-domain status. Verify the existing Pages project's assigned target before proposing any record change; do not infer a required IP address from a transient address answer.
 
 Then open both branded `/spellbook` links in desktop and iPhone Safari, confirm that Spellbook loads, and record the dated results in #17 before closing it. If a fallback returns an interstitial or an unexpected target, record the actual result rather than treating any 302 as success. The issue also records `https://bit.ly/4iLdcq5` as an earlier fallback; leave existing Bitly links intact.
 
 ## Diagnose a failed check
 
 1. Compare the deployed Pages `/spellbook` response with the two custom-domain responses. If Pages itself fails, inspect the latest `jamula-links` deployment and its parsed `_redirects` rules before changing DNS.
-2. In Pages > Custom domains, inspect **both** `s.jamula.net` and `s.jamula.com`. Confirm their current DNS and certificate status. These are subdomains using external Namecheap DNS; no nameserver migration is needed.
-3. If public DNS is incorrect, verify the current required CNAME in the existing Pages project first. The assigned target recorded in #17 is `jamula-links.pages.dev`. Only after verification and owner authorization, correct the `s` CNAME in the affected zone. Do not restore `cname.bitly.com` for this Pages-hosted link, create competing records, or change MX, nameservers or unrelated records.
+2. In Pages > Custom domains, inspect **both** `s.jamula.net` and `s.jamula.com`. Confirm their current DNS and certificate status, and compare the DNS provider's configured records with any flattening/proxy behavior. A missing public CNAME with working address resolution and HTTPS does not justify replacing records. These are subdomains recorded as using external Namecheap DNS; no nameserver migration is needed.
+3. If the combined DNS, HTTPS and provider-status checks establish an incorrect configuration, verify the current required CNAME in the existing Pages project first. The assigned target recorded in #17 is `jamula-links.pages.dev`. Only after verification and owner authorization, correct the `s` CNAME in the affected zone. Do not restore `cname.bitly.com` for this Pages-hosted link, create competing records, or change MX, nameservers or unrelated records.
 4. Wait for DNS propagation and certificate activation, then repeat the public checks. Keep the working fallback available throughout troubleshooting.
 
 Changes to redirect destinations should remain focused issue-linked PRs. Verify the Pages response and both branded links after deployment; retain 302 redirects while destinations are being validated.
