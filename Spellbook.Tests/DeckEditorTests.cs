@@ -272,6 +272,47 @@ public sealed class DeckEditorTests
     }
 
     [Fact]
+    public void InvalidHeicConversionAndVideoPrepareLeaveLocalDeckUnchanged()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.convertHeic", _ => true).SetResult("not-jpeg");
+        context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("not-blob");
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Media failures");
+        Button(page, "Create deck").Click();
+        var picker = page.FindComponents<InputFile>()[1];
+
+        picker.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "card.heic", contentType: "image/heic"));
+        page.WaitForAssertion(() => Assert.Contains("Media could not be processed locally", page.Markup));
+        Assert.Empty(page.FindAll(".scan-preview"));
+
+        picker.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
+        page.WaitForAssertion(() => Assert.Contains("Media could not be processed locally", page.Markup));
+        Assert.Empty(page.FindAll("#card-video-preview"));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+    }
+
+    [Fact]
+    public void InvalidVideoFrameCaptureCanBeRetriedWithoutAddingCard()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("blob:review");
+        context.JSInterop.Setup<string>("spellbookMedia.captureFrame", _ => true).SetResult("not-jpeg");
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Frame retry");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("#card-video-preview")));
+        Button(page, "Capture selected video frame").Click();
+        page.WaitForAssertion(() => Assert.Contains("Could not capture this frame", page.Markup));
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+    }
+
+    [Fact]
     public void OcrWithNoUsableTitleAllowsManualCorrection()
     {
         using var context = CreateContext();
