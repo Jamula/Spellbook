@@ -29,8 +29,8 @@ export async function onRequestPost({ request, env }) {
     payload = JSON.parse(raw);
   } catch { return json({ error: "Invalid feedback" }, 400); }
   const kind = payload?.kind;
-  const title = payload?.title?.trim();
-  const details = payload?.details?.trim();
+  const title = typeof payload?.title === "string" ? payload.title.trim() : null;
+  const details = typeof payload?.details === "string" ? payload.details.trim() : null;
   if (!["Bug", "Feature", "General"].includes(kind) ||
       typeof title !== "string" || title.length < 3 || title.length > 120 ||
       typeof details !== "string" || details.length < 10 || details.length > 4000 ||
