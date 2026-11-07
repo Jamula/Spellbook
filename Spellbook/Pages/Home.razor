@@ -55,7 +55,7 @@ else
                 <div class="card-rows">
                 @foreach (var card in selected.Cards.OrderBy(c => c.Name).ToList())
                 {
-                    <div class="card-row"><span>@card.Name</span><div class="row-actions"><button aria-label="Decrease quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @card.Name" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
+                    <div class="card-row"><span><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @card.Name on Scryfall">@card.Name</a></span><div class="row-actions"><button aria-label="Decrease quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @card.Name" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
                 }
                 </div>
                 <h3>Scan a card from a photo or video</h3>
@@ -90,7 +90,12 @@ else
                                     {
                                         <img alt="Scryfall image of @verifiedScan.Name" loading="lazy" src="@verifiedScan.ImageUrl" />
                                     }
-                                    <div><strong>@verifiedScan.Name</strong><p>@verifiedScan.TypeLine · mana value @verifiedScan.ManaValue</p></div>
+                                    <div><strong>@verifiedScan.Name</strong><p>@verifiedScan.TypeLine · mana value @verifiedScan.ManaValue</p>
+                                        @if (IsScryfallLink(verifiedScan.ScryfallUrl))
+                                        {
+                                            <a href="@verifiedScan.ScryfallUrl" target="_blank" rel="noopener noreferrer">View card on Scryfall ↗</a>
+                                        }
+                                    </div>
                                 </div>
                             }
                             <button @onclick="ConfirmScannedCard" disabled="@mediaBusy">Add confirmed card</button>
@@ -106,6 +111,12 @@ else
     </div>
 }
 @code {
+    private static string ScryfallCardSearchUrl(string name) =>
+        "https://scryfall.com/search?q=" + Uri.EscapeDataString("!" + "\"" + name + "\"");
+    private static bool IsScryfallLink(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        uri.Host.Equals("scryfall.com", StringComparison.OrdinalIgnoreCase);
     private List<Deck> decks = [];
     private Deck? selected;
     private bool loaded;
