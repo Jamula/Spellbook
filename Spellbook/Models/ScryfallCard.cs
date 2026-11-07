@@ -10,4 +10,5 @@ public sealed class ScryfallCard
     public double ManaValue { get; set; }
     public string TypeLine { get; set; } = "";
     public string? ImageUrl { get; set; }
+    public string? ScryfallUrl { get; set; }
 }
