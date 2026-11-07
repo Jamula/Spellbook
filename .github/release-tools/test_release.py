@@ -15,14 +15,16 @@ class ReleaseContracts(unittest.TestCase):
             (site / "_framework").mkdir(parents=True)
             (site / "index.html").write_text("old known-good UI")
             (site / "_framework/blazor.webassembly.js").write_text("runtime")
-            package(site, root / "release", SHA, 123)
+            package(site, root / "release", SHA, 123, "0.1.0")
             archive = root / "release/spellbook-site.zip"; digest = sha256(archive)
             for operation in ("promotion", "rollback"):
-                manifest = verify(archive, SHA, digest, root / operation)
+                manifest = verify(archive, SHA, digest, root / operation, "v0.1.0-rc.1")
                 self.assertEqual("123", manifest["run_id"])
+                self.assertEqual("0.1.0", manifest["app_version"])
                 self.assertEqual("old known-good UI", (root / operation / "index.html").read_text())
             with self.assertRaises(ValueError): verify(archive, "b" * 40)
             with self.assertRaises(ValueError): verify(archive, SHA, "0" * 64)
+            with self.assertRaises(ValueError): verify(archive, SHA, version="v0.2.0")
             original = archive.read_bytes()
             for corruption in ("checksum", "symlink", "duplicate"):
                 altered = root / f"{corruption}.zip"

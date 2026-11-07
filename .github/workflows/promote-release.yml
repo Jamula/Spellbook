@@ -74,7 +74,7 @@ jobs:
           jq -e '.draft == false and .immutable == true' release.json
           digest=$(jq -er '.assets[] | select(.name == "spellbook-site.zip") | .digest | select(startswith("sha256:"))' release.json)
           gh release download "$VERSION" --pattern spellbook-site.zip --dir release-bundle
-          python3 .github/release-tools/release.py verify release-bundle/spellbook-site.zip "$SOURCE_SHA" --digest "$digest" --destination .github/release-site
+          python3 .github/release-tools/release.py verify release-bundle/spellbook-site.zip "$SOURCE_SHA" --digest "$digest" --version "$VERSION" --destination .github/release-site
           test "$(gh api "repos/$GH_REPO/commits/$VERSION" --jq .sha)" = "$SOURCE_SHA"
           source_run=$(jq -r .run_id .github/release-site/release-manifest.json)
           gh api "repos/$GH_REPO/actions/runs/$source_run" > run.json
@@ -87,7 +87,7 @@ jobs:
             previous_sha=$(gh api "repos/$GH_REPO/commits/$PREVIOUS" --jq .sha)
             previous_digest=$(jq -er '.assets[] | select(.name == "spellbook-site.zip") | .digest | select(startswith("sha256:"))' previous.json)
             gh release download "$PREVIOUS" --pattern spellbook-site.zip --dir previous-bundle
-            python3 .github/release-tools/release.py verify previous-bundle/spellbook-site.zip "$previous_sha" --digest "$previous_digest"
+            python3 .github/release-tools/release.py verify previous-bundle/spellbook-site.zip "$previous_sha" --digest "$previous_digest" --version "$PREVIOUS"
           fi
       - name: Install locked browser gate and deploy tooling
         working-directory: .github/release-tools

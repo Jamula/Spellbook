@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       version:
-        description: New SemVer tag, e.g. v0.1.0-rc.1
+        description: New tag matching compiled app version, e.g. v0.1.0-rc.1
         required: true
         type: string
 
@@ -61,7 +61,7 @@ jobs:
           cd release-bundle
           sha256sum --check SHA256SUMS
           cd ..
-          python3 .github/release-tools/release.py verify release-bundle/spellbook-site.zip "$SOURCE_SHA" --destination .github/release-site
+          python3 .github/release-tools/release.py verify release-bundle/spellbook-site.zip "$SOURCE_SHA" --version "$VERSION" --destination .github/release-site
           test "$(jq -r .run_id .github/release-site/release-manifest.json)" = "$SOURCE_RUN"
       - name: Install locked browser smoke dependency
         working-directory: .github/release-tools

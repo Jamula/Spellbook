@@ -18,15 +18,16 @@ def sha256(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def package(site, output, commit, run_id):
+def package(site, output, commit, run_id, app_version):
     site, output = Path(site), Path(output)
     require(re.fullmatch(r"[a-f0-9]{40}", commit), "Expected full commit SHA")
     require(str(run_id).isdigit(), "Expected numeric CI run ID")
+    require(re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", app_version), "Expected app MAJOR.MINOR.PATCH version")
     require((site / "index.html").is_file(), "Missing index.html")
     require((site / "_framework/blazor.webassembly.js").is_file(), "Missing Blazor runtime")
     files = sorted(p for p in site.rglob("*") if p.is_file())
     require(not any(p.is_symlink() for p in site.rglob("*")), "Symlinks are forbidden")
-    manifest = {"schema": 1, "commit": commit, "run_id": str(run_id),
+    manifest = {"schema": 1, "commit": commit, "run_id": str(run_id), "app_version": app_version,
                 "files": {p.relative_to(site).as_posix(): sha256(p) for p in files}}
     require("release-manifest.json" not in manifest["files"], "Reserved manifest filename")
     output.mkdir(parents=True, exist_ok=True)
@@ -38,7 +39,7 @@ def package(site, output, commit, run_id):
     (output / "SHA256SUMS").write_text(f"{digest}  spellbook-site.zip\n")
 
 
-def verify(archive_path, expected_sha, expected_digest=None, destination=None):
+def verify(archive_path, expected_sha, expected_digest=None, destination=None, version=None):
     if expected_digest:
         require(sha256(archive_path) == expected_digest.removeprefix("sha256:"), "Archive checksum mismatch")
     with zipfile.ZipFile(archive_path) as archive:
@@ -54,6 +55,10 @@ def verify(archive_path, expected_sha, expected_digest=None, destination=None):
         manifest = json.loads(archive.read("release-manifest.json"))
         require(manifest["schema"] == 1 and manifest["commit"] == expected_sha, "Manifest commit/schema mismatch")
         require(str(manifest["run_id"]).isdigit(), "Missing source CI run")
+        require(re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", manifest["app_version"]), "Missing app version")
+        if version:
+            require(re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-rc\.[1-9]\d*)?", version), "Invalid release version")
+            require(version.removeprefix("v").split("-rc.")[0] == manifest["app_version"], "Release tag must match compiled app version")
         require(set(names) == set(manifest["files"]) | {"release-manifest.json"}, "Untracked/missing files")
         require({"index.html", "_framework/blazor.webassembly.js"} <= set(manifest["files"]), "Missing app entry points")
         for name, digest in manifest["files"].items():
@@ -108,11 +113,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("package")
-    for name in ("site", "output", "commit", "run_id"):
+    for name in ("site", "output", "commit", "run_id", "app_version"):
         p.add_argument(name)
     p = sub.add_parser("verify")
     p.add_argument("archive"); p.add_argument("commit")
     p.add_argument("--digest"); p.add_argument("--destination")
+    p.add_argument("--version")
     p = sub.add_parser("candidate")
     p.add_argument("run"); p.add_argument("checks"); p.add_argument("version")
     p = sub.add_parser("environment")
@@ -122,7 +128,7 @@ def main():
     if command == "package":
         package(**args)
     elif command == "verify":
-        print(json.dumps(verify(args["archive"], args["commit"], args["digest"], args["destination"])))
+        print(json.dumps(verify(args["archive"], args["commit"], args["digest"], args["destination"], args["version"])))
     elif command == "candidate":
         print(candidate(json.loads(Path(args["run"]).read_text()), json.loads(Path(args["checks"]).read_text()), args["version"]))
     elif command == "environment":

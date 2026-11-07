@@ -4,9 +4,11 @@ Tracking: #31; post-merge CI recovery: #36. These workflows do **not** activate 
 
 ## Contract
 
-Use SemVer tags `vMAJOR.MINOR.PATCH`; breaking saved-data compatibility increments MAJOR, compatible features MINOR, fixes PATCH. Candidates may use `-rc.N`. Never reuse, move, or delete a published version. Review generated release notes and add preview URL, Safari results, behavior changes, known limitations, and data migration/recovery instructions.
+Current application and first release version: **0.1.0** (`v0.1.0` tag). Each completed phase increments MINOR: Phase2 is 0.2.0; Phase3 is 0.3.0. Significant releases within a phase increment PATCH/revision (0.1.1, 0.1.2). General availability is **1.0.0**. Keep current drafts at 0.1.0; bump to 0.2.0 only when preparing the Phase2 release, not merely because Phase2 work has started. Candidates may append `-rc.N` to the same core version. Never reuse, move, or delete a published version.
 
-PRs retain required `build`, `Test coverage`, and GitHub `CodeQL` checks. Cloudflare PR previews remain separate from production. Main is integration, not production promotion. CI publishes once: its `spellbook-site` artifact now contains `spellbook-site.zip` and `SHA256SUMS`, rather than loose deployable files. Inside the ZIP, `release-manifest.json` records the full tested commit, CI run ID and SHA-256 of every static file.
+The build reads the app's actual MSBuild `Version` without rebuilding and binds it as `app_version` in the immutable artifact manifest. Candidate, promotion and rollback refuse a tag whose core version differs from that artifact (for example, a 0.1.0 binary cannot become v0.2.0). Update the app version before CI when preparing a new release; do not edit an archived ZIP's metadata. Review generated notes and add preview URL, Safari results, behavior changes, known limitations, and migration/recovery instructions.
+
+PRs retain required `build`, `Test coverage`, and GitHub `CodeQL` checks. Cloudflare PR previews remain separate from production. Main is integration, not production promotion. CI publishes once: its `spellbook-site` artifact now contains `spellbook-site.zip` and `SHA256SUMS`, rather than loose deployable files. Inside the ZIP, `release-manifest.json` records the full tested commit, CI run ID, compiled app version and SHA-256 of every static file.
 
 **Prepare release candidate** downloads the existing artifact from a successful real main CI run, checks CodeQL for that SHA, verifies every file and runs one browser journey against the exact ZIP. It creates a **draft** GitHub Release containing ZIP, checksum and evidence. It never restores, builds or publishes .NET again. PR artifacts cannot become main candidates. Expired CI artifacts require a fresh main CI run and candidate; never reconstruct a prior release for rollback.
 
@@ -46,7 +48,7 @@ Keep v1 data/JSON readable in compatible releases. Future migrations need origin
 
 ```sh
 python3 -m unittest discover -s .github/release-tools -p 'test_*.py' -v
-python3 .github/release-tools/release.py package publish/wwwroot release-bundle COMMIT_SHA CI_RUN_ID
+python3 .github/release-tools/release.py package publish/wwwroot release-bundle COMMIT_SHA CI_RUN_ID APP_VERSION
 python3 .github/release-tools/release.py verify release-bundle/spellbook-site.zip COMMIT_SHA --destination .github/release-site
 cd .github/release-tools
 npm ci --ignore-scripts --no-audit --no-fund
