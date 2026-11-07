@@ -92,6 +92,7 @@ else
     private string recognizedText = "";
     private string mediaMessage = "";
     private bool mediaBusy;
+    private int scanGeneration;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -208,6 +209,7 @@ else
     private async Task MediaSelected(InputFileChangeEventArgs e)
     {
         ClearScan();
+        var generation = scanGeneration;
         var files = e.GetMultipleFiles(25);
         mediaNames = files.Select(f => f.Name).ToList();
         if (files.Count == 0) return;
@@ -227,6 +229,7 @@ else
             using var stream = image.OpenReadStream(6_000_000);
             using var buffer = new MemoryStream();
             await stream.CopyToAsync(buffer);
+            if (generation != scanGeneration) return;
             previewDataUrl = $"data:{image.ContentType};base64,{Convert.ToBase64String(buffer.ToArray())}";
             mediaMessage = "Preview ready. Recognition is optional, and nothing is added until you confirm.";
         }
@@ -241,10 +244,13 @@ else
     {
         if (previewDataUrl is null || mediaBusy) return;
         mediaBusy = true;
+        var generation = scanGeneration;
+        var photo = previewDataUrl;
         mediaMessage = "Reading card text locally. The first run may take a while while OCR assets download.";
         try
         {
-            var text = await JS.InvokeAsync<string>("spellbookMedia.recognize", previewDataUrl);
+            var text = await JS.InvokeAsync<string>("spellbookMedia.recognize", photo);
+            if (generation != scanGeneration) return;
             recognizedText = text.Trim();
             // OCR can mistake card names for other printed text. Every candidate must be confirmed.
             candidateName = recognizedText.Split('\n', StringSplitOptions.RemoveEmptyEntries)
@@ -256,6 +262,7 @@ else
         }
         catch (JSException)
         {
+            if (generation != scanGeneration) return;
             mediaMessage = "On-device OCR is unavailable. You can still type the card name manually.";
         }
         finally
@@ -282,6 +289,7 @@ else
 
     private void ClearScan()
     {
+        scanGeneration++;
         mediaNames.Clear();
         previewDataUrl = null;
         candidateName = "";
