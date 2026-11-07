@@ -57,14 +57,18 @@ public static partial class DeckListCodec
             if (!match.Success) throw new InvalidDataException($"Line {number}: expected a quantity followed by a card name.");
             var name = match.Groups[2].Value.Trim();
             // Archidekt text includes categories in brackets; only recognized board names change zones.
+            var taggedZones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             while (TrailingTag().IsMatch(name))
             {
                 var tag = TrailingTag().Match(name);
                 var category = tag.Groups[1].Value;
-                if (Zones.TryGetValue(category, out zone)) rowSection = zone;
+                if (Zones.TryGetValue(category, out zone)) taggedZones.Add(zone);
                 else warnings.Add("Non-board categories and tags are omitted; review the imported cards and zones.");
                 name = name[..tag.Index].Trim();
             }
+            if (taggedZones.Count > 1)
+                throw new InvalidDataException($"Line {number}: conflicting board tags; choose one board before importing.");
+            rowSection = taggedZones.FirstOrDefault() ?? rowSection;
             var printing = PrintingSuffix().Match(name);
             if (printing.Success)
             {

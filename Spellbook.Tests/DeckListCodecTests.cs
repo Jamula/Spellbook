@@ -11,17 +11,15 @@ public sealed class DeckListCodecTests
     [InlineData("archidekt.txt")]
     public void SampleExportsPreserveQuantitiesAndZonesAndRoundTrip(string sample)
     {
-        var imported = DeckListCodec.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Samples", sample)), "Sample");
+        var imported = DeckListCodec.Parse(File.ReadAllText(Path.Join(AppContext.BaseDirectory, "Samples", sample)), "Sample");
         Assert.Equal(4, imported.Deck.Cards.Single(c => c.Name == "Lightning Bolt" && c.Section == "Main").Quantity);
         Assert.Contains(imported.Deck.Cards, c => c.Name == "Negate" && c.Quantity == 2 && c.Section == "Sideboard");
         Assert.Contains(imported.Deck.Cards, c => c.Name == "Niv-Mizzet, Parun" && c.Section == "Commander");
         Assert.Contains(imported.Deck.Cards, c => c.Name == "Opt" && c.Section == "Maybeboard");
         Assert.NotEmpty(imported.Warnings);
-        foreach (var exported in new[] { DeckListCodec.ExportText(imported.Deck), DeckListCodec.ExportCsv(imported.Deck) })
-        {
-            var result = DeckListCodec.Parse(exported, "Round trip");
-            Assert.Equal(Rows(imported.Deck), Rows(result.Deck));
-        }
+        var roundTrips = new[] { DeckListCodec.ExportText(imported.Deck), DeckListCodec.ExportCsv(imported.Deck) }
+            .Select(exported => DeckListCodec.Parse(exported, "Round trip"));
+        foreach (var result in roundTrips) Assert.Equal(Rows(imported.Deck), Rows(result.Deck));
     }
 
     [Fact]
@@ -34,6 +32,18 @@ public sealed class DeckListCodecTests
         Assert.Contains(deck.Cards, c => c.Name == "Fire // Ice");
         Assert.Contains(deck.Cards, c => c.Name == "Éowyn, Shieldmaiden" && c.Section == "Commander");
     }
+
+    [Theory]
+    [InlineData("[Mainboard] [Sideboard]")]
+    [InlineData("[Sideboard] [Mainboard]")]
+    public void TextRejectsConflictingBoardTagsRegardlessOfOrder(string tags) =>
+        Assert.Throws<InvalidDataException>(() => DeckListCodec.Parse($"1 Opt {tags}", "Conflict"));
+
+    [Theory]
+    [InlineData("[Main] [Mainboard]", "Main")]
+    [InlineData("[Sideboard] [Side board]", "Sideboard")]
+    public void TextAllowsMultipleAliasesForTheSameBoard(string tags, string section) =>
+        Assert.Equal(section, Assert.Single(DeckListCodec.Parse($"1 Opt {tags}", "Aliases").Deck.Cards).Section);
 
     [Fact]
     public void CsvHandlesBomQuotedCommasQuotesColumnAliasesAndCategories()
