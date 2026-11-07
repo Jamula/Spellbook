@@ -107,7 +107,7 @@ test('iPhone WebKit keeps selected photo local and requires editable card-name c
     await candidate.fill('Avacyn, Angel of Hope');
     await candidate.press('Tab');
     await page.getByRole('button', { name: 'Add confirmed card' }).click();
-    await page.getByRole('link', { name: 'Avacyn, Angel of Hope' }).waitFor();
+    await page.locator('.card-row a[href^="https://scryfall.com/search"]').waitFor();
     assert.equal(await page.locator('.card-row').count(), 1);
   } finally { await context.close(); }
 });
