@@ -23,7 +23,12 @@ test('mobile WebKit loads Spellbook with PWA metadata and local icon', async () 
     assert.equal(manifest.start_url, '/');
     assert.equal(manifest.scope, '/');
     assert.ok(manifest.icons.some(icon => icon.src === '/icons/spellbook.svg'));
+    assert.ok(manifest.icons.some(icon => icon.src === '/icons/spellbook-192.png'));
+    assert.ok(manifest.icons.some(icon => icon.src === '/icons/spellbook-512.png'));
     assert.equal((await page.request.get('/icons/spellbook.svg')).status(), 200);
+    assert.equal((await page.request.get('/icons/spellbook-192.png')).status(), 200);
+    assert.equal((await page.request.get('/icons/spellbook-512.png')).status(), 200);
+    assert.equal(await page.locator('link[rel="apple-touch-icon"]').getAttribute('href'), 'icons/spellbook-192.png');
   } finally {
     await context.close();
   }
