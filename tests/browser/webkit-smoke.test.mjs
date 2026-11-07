@@ -6,6 +6,21 @@ const origin = 'http://127.0.0.1:4173';
 const browser = await webkit.launch({ headless: true });
 after(async () => browser.close());
 
+async function openAppReady(page) {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const create = page.getByRole('button', { name: 'Create deck' });
+  try {
+    await create.waitFor({ timeout: 12000 });
+  } catch {
+    // WebKit WASM bootstrap can lag on a cold, loaded CI runner. One reload
+    // verifies the app recovers rather than accepting a permanently blank page.
+    console.warn('WebKit bootstrap was delayed; retrying once after reload');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await create.waitFor({ timeout: 20000 });
+  }
+}
+
+
 test('mobile WebKit loads Spellbook with PWA metadata and local icon', async () => {
   const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
   const page = await context.newPage();
@@ -48,7 +63,7 @@ test('iPhone WebKit creates a deck, edits a card and persists after reload', asy
   const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
   const page = await context.newPage();
   try {
-    await page.goto('/');
+    await openAppReady(page);
     await page.getByRole('button', { name: 'Create deck' }).waitFor({ timeout: 30000 });
     await page.getByRole('textbox', { name: 'New deck name' }).fill('WebKit smoke deck');
     await page.getByRole('button', { name: 'Create deck' }).click();
@@ -69,7 +84,7 @@ test('iPhone WebKit opens in-app feedback modal without navigation or private da
   const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
   const page = await context.newPage();
   try {
-    await page.goto('/');
+    await openAppReady(page);
     await page.getByRole('button', { name: 'Send feedback' }).click();
     const dialog = page.getByRole('dialog');
     await dialog.waitFor();
@@ -89,7 +104,7 @@ test('iPhone WebKit keeps selected photo local and requires editable card-name c
   const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
   const page = await context.newPage();
   try {
-    await page.goto('/');
+    await openAppReady(page);
     await page.getByRole('button', { name: 'Create deck' }).waitFor({ timeout: 30000 });
     await page.getByRole('textbox', { name: 'New deck name' }).fill('Photo smoke deck');
     await page.getByRole('button', { name: 'Create deck' }).click();
