@@ -12,6 +12,7 @@ public sealed class FeedbackLinkTests
         var context = new BunitContext();
         context.JSInterop.Setup<bool>("spellbookFeedback.open", _ => true).SetResult(configured);
         context.JSInterop.SetupVoid("spellbookFeedback.close", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("spellbookFeedback.ensureOpen", _ => true).SetVoidResult();
         return context;
     }
 
@@ -26,6 +27,7 @@ public sealed class FeedbackLinkTests
         Assert.Contains("issues are public", page.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(page.FindAll("a[href*='/issues/new']"));
         Assert.Single(context.JSInterop.Invocations["spellbookFeedback.open"]);
+        Assert.NotEmpty(context.JSInterop.Invocations["spellbookFeedback.ensureOpen"]);
         Assert.DoesNotContain("Confidential collection", page.Find(".feedback-dialog").TextContent);
         var version = page.Find(".app-version").TextContent;
         Assert.Matches(@"^Version \d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$", version);
