@@ -1,0 +1,6 @@
+Quantity,Name,Categories,Commander,Edition
+1,"Niv-Mizzet, Parun",Commander,true,grn
+4,Lightning Bolt,Mainboard,false,m11
+2,Island,Mainboard,false,m21
+2,Negate,Sideboard,false,m20
+1,Opt,Maybeboard,false,eld

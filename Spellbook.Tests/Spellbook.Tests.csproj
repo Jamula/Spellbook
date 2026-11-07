@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,4 +20,7 @@
     <ProjectReference Include="../Spellbook/Spellbook.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../samples/decklists/*" Link="Samples/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

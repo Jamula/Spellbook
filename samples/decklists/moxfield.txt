@@ -1,0 +1,14 @@
+Mainboard
+4 Lightning Bolt (M11) 146
+2 Island
+1 Fire // Ice
+
+Sideboard
+2 Negate
+1 Lightning Bolt
+
+Commander
+1 Niv-Mizzet, Parun
+
+Maybeboard
+1 Opt

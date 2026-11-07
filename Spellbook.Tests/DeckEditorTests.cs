@@ -83,7 +83,7 @@ public sealed class DeckEditorTests
         using var context = CreateContext(JsonSerializer.Serialize(new[] { existing }));
         var page = context.Render<Home>();
         page.WaitForAssertion(() => Assert.Equal("Existing", page.Find("h2").TextContent));
-        Assert.Contains("Main deck · 3 cards", page.Markup);
+        Assert.Contains("Deck · 3 cards", page.Markup);
 
         var importer = page.FindComponents<InputFile>()[0];
         importer.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
