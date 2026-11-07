@@ -285,7 +285,7 @@ public sealed class DeckEditorTests
     }
 
     [Fact]
-    public void ScryfallAutocompleteProvidesSuggestionsAndManualEntryRemainsPossible()
+    public async Task ScryfallAutocompleteProvidesSuggestionsAndManualEntryRemainsPossible()
     {
         using var context = CreateContext();
         context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
@@ -295,16 +295,16 @@ public sealed class DeckEditorTests
         page.Find("[aria-label='New deck name']").Change("Scryfall deck");
         Button(page, "Create deck").Click();
 
-        page.Find("[aria-label='Card name']").Input("Lightn");
+        await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Input("Lightn"));
         page.WaitForAssertion(() => Assert.Contains("Lightning Bolt", page.Find(".card-suggestions").TextContent),
             timeout: TimeSpan.FromSeconds(4));
         Assert.Empty(SavedDecks(context)[0].Cards);
-        page.Find("[aria-label='Card name']").Change("Lightning Bolt");
+        await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Change("Lightning Bolt"));
         page.WaitForAssertion(() => Assert.Equal("Lightning Bolt", page.Find("[aria-label='Card name']").GetAttribute("value")));
-        Button(page, "Add").Click();
+        await page.InvokeAsync(() => Button(page, "Add").Click());
         page.WaitForAssertion(() => Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name));
 
-        page.Find("[aria-label='Card name']").Change("My custom offline card");
+        await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Change("My custom offline card"));
         Button(page, "Add").Click();
         page.WaitForAssertion(() => Assert.Contains(SavedDecks(context)[0].Cards, card => card.Name == "My custom offline card"));
     }
