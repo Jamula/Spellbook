@@ -238,7 +238,7 @@ public sealed class DeckStoreTests
                 new DeckCard { Name = "lightning bolt", Section = "Main" }
             ]
         };
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[] { deck }));
+        Assert.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[] { deck })));
 
         deck.Cards[1].Section = "Sideboard";
         Assert.Equal(2, Assert.Single(store.ParseImport(JsonSerializer.Serialize(new[] { deck }))).Cards.Count);
