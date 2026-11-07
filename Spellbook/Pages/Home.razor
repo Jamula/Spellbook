@@ -7,6 +7,10 @@
 else if (loadFailed)
 {
     <p role="alert"><strong>Saved decks could not be loaded.</strong> @message No edits will be saved until the problem is resolved.</p>
+    <p>You can download your raw saved data before restoring a valid backup. Recovery replaces the existing browser data, so keep the raw copy first.</p>
+    <button @onclick="ExportDamaged">Download raw saved data</button>
+    <label><input type="checkbox" @bind="confirmRecovery" /> I understand restoring a backup will replace the currently unreadable data.</label>
+    <label class="upload">Restore JSON backup <InputFile OnChange="RecoverImport" accept=".json,application/json" disabled="@(!confirmRecovery)" /></label>
 }
 else
 {
@@ -56,6 +60,7 @@ else
     private Deck? selected;
     private bool loaded;
     private bool loadFailed;
+    private bool confirmRecovery;
     private string lastSavedName = "";
     private string newDeckName = "";
     private string cardName = "";
@@ -134,6 +139,30 @@ else
         }
         await Store.SaveAsync(decks);
         lastSavedName = selected?.Name ?? "";
+    }
+    private Task ExportDamaged() => Store.ExportDamagedAsync();
+    private async Task RecoverImport(InputFileChangeEventArgs e)
+    {
+        if (!loadFailed || !confirmRecovery) return;
+        try
+        {
+            var file = e.File;
+            if (file.Size > 2_000_000) throw new InvalidDataException("Backup must be smaller than 2 MB.");
+            using var stream = file.OpenReadStream(2_000_000);
+            using var reader = new StreamReader(stream);
+            var recovered = Store.ParseImport(await reader.ReadToEndAsync());
+            await Store.SaveAsync(recovered);
+            decks = recovered;
+            selected = decks.FirstOrDefault();
+            lastSavedName = selected?.Name ?? "";
+            loadFailed = false;
+            confirmRecovery = false;
+            message = $"Restored {recovered.Count} deck(s).";
+        }
+        catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or Microsoft.JSInterop.JSException)
+        {
+            message = $"Recovery failed; original saved data was not intentionally replaced: {ex.Message}";
+        }
     }
     private Task Export() => Store.ExportAsync(decks);
     private async Task Import(InputFileChangeEventArgs e)
