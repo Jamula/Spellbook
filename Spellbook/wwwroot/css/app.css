@@ -128,3 +128,11 @@ footer { text-align: center; padding: 28px; }
 .scan-actions label{width:100%}.scan-actions label input{width:100%}
 .scan-actions details{width:100%}.scan-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}
 @media(max-width:600px){.scan-review{grid-template-columns:1fr}.scan-preview{max-height:320px;margin:auto}}
+
+/* Scryfall suggestions and on-device scan verification */
+.card-suggestions{display:grid;gap:4px;max-width:560px;margin:-8px 0 14px;padding:7px;border:1px solid var(--border);border-radius:10px;background:#fff}
+.card-suggestion{width:100%;text-align:left;border:0;background:#f1f6ef;color:#22352a;padding:10px 12px;border-radius:6px}
+.card-suggestion:hover,.card-suggestion:focus-visible{background:#e0eedf}
+.verified-card{display:flex;align-items:flex-start;gap:12px;padding:10px;border:1px solid var(--border);border-radius:10px;max-width:100%;overflow-wrap:anywhere}
+.verified-card img{width:92px;height:auto;border-radius:6px;flex-shrink:0}
+.verified-card p{margin:6px 0}

@@ -284,6 +284,235 @@ public sealed class DeckEditorTests
         Assert.Equal("Imported deck", page.Find("h2").TextContent);
     }
 
+    [Fact]
+    public async Task ScryfallAutocompleteProvidesSuggestionsAndManualEntryRemainsPossible()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult(["Lightning Bolt", "Lightning Helix"]);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Scryfall deck");
+        Button(page, "Create deck").Click();
+
+        await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Input("Lightn"));
+        page.WaitForAssertion(() => Assert.Contains("Lightning Bolt", page.Find(".card-suggestions").TextContent),
+            timeout: TimeSpan.FromSeconds(4));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+        await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Change("Lightning Bolt"));
+        page.WaitForAssertion(() => Assert.Equal("Lightning Bolt", page.Find("[aria-label='Card name']").GetAttribute("value")));
+        await page.InvokeAsync(() => Button(page, "Add").Click());
+        page.WaitForAssertion(() => Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name));
+
+        await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Change("My custom offline card"));
+        Button(page, "Add").Click();
+        page.WaitForAssertion(() => Assert.Contains(SavedDecks(context)[0].Cards, card => card.Name == "My custom offline card"));
+    }
+
+
+    [Fact]
+    public void ScryfallLookupFailureRetainsManualEntry()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetException(new Microsoft.JSInterop.JSException("Network unavailable"));
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Offline lookup");
+        Button(page, "Create deck").Click();
+        page.Find("[aria-label='Card name']").Input("Lightning");
+        page.WaitForAssertion(() => Assert.Contains("Scryfall is unavailable", page.Markup),
+            timeout: TimeSpan.FromSeconds(4));
+        Assert.Empty(page.FindAll(".card-suggestions"));
+
+        page.Find("[aria-label='Card name']").Change("Custom card");
+        Button(page, "Add").Click();
+        page.WaitForAssertion(() => Assert.Equal("Custom card", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Fact]
+    public void OcrFailureCanBeRecoveredByManualCardName()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.recognize", _ => true)
+            .SetException(new Microsoft.JSInterop.JSException("OCR worker failed"));
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Fallback");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "ocr-failure.jpg", contentType: "image/jpeg"));
+        Button(page, "Recognize text on device").Click();
+        page.WaitForAssertion(() => Assert.Contains("On-device OCR is unavailable", page.Markup));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+
+        page.Find("[aria-label='Name from photo']").Change("Forest");
+        Button(page, "Add confirmed card").Click();
+        page.WaitForAssertion(() => Assert.Equal("Forest", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Fact]
+    public void ExactScryfallLookupWithoutMatchNeverAutomaticallyAddsCard()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Verify manually");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "unknown-card.jpg", contentType: "image/jpeg"));
+        page.Find("[aria-label='Name from photo']").Change("Not a known MTG card");
+        Button(page, "Verify against Scryfall").Click();
+        page.WaitForAssertion(() => Assert.Contains("No exact Scryfall match", page.Markup));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+        Button(page, "Add confirmed card").Click();
+        page.WaitForAssertion(() => Assert.Equal("Not a known MTG card", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Fact]
+    public void InvalidDeckRenameCannotOverwriteSavedName()
+    {
+        using var context = CreateContext();
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Original");
+        Button(page, "Create deck").Click();
+        page.Find(".editor label input").Change(" ");
+        Assert.Contains("previous name was restored", page.Markup);
+        Assert.Equal("Original", Assert.Single(SavedDecks(context)).Name);
+
+        page.Find(".editor label input").Change(new string('X', 161));
+        Assert.Equal("Original", Assert.Single(SavedDecks(context)).Name);
+    }
+
+
+    [Fact]
+    public void CanonicalAvacynLookupRequiresExplicitConfirmationBeforeSaving()
+    {
+        // Canonical reference supplied for MVP acceptance:
+        // https://scryfall.com/card/avr/6/avacyn-angel-of-hope
+        using var context = CreateContext();
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
+            .SetResult(new ScryfallCard
+            {
+                Name = "Avacyn, Angel of Hope",
+                ManaValue = 8,
+                TypeLine = "Legendary Creature — Angel",
+                ImageUrl = "https://cards.scryfall.io/normal/front/a/v/avacyn-reference.jpg"
+            });
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Avacyn test deck");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "avacyn.jpg", contentType: "image/jpeg"));
+        page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
+        Button(page, "Verify against Scryfall").Click();
+        page.WaitForAssertion(() => Assert.Contains("Found on Scryfall", page.Markup));
+        Assert.Contains("mana value 8", page.Markup);
+        Assert.Contains("Legendary Creature", page.Markup);
+        Assert.Single(page.FindAll(".verified-card img"));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+        Button(page, "Add confirmed card").Click();
+        page.WaitForAssertion(() => Assert.Equal(
+            "Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Fact]
+    public void ScryfallVerificationExceptionAllowsManualConfirmationWithoutAutoSaving()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
+            .SetException(new Microsoft.JSInterop.JSException("Scryfall offline"));
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Offline scan");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1], "offline.jpg", contentType: "image/jpeg"));
+        page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
+        Button(page, "Verify against Scryfall").Click();
+        page.WaitForAssertion(() => Assert.Contains("Card lookup unavailable", page.Markup));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+        Button(page, "Add confirmed card").Click();
+        page.WaitForAssertion(() => Assert.Equal(
+            "Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+    [Fact]
+    public void EditingScannedCardNameInvalidatesPreviousVerification()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
+            .SetResult(new ScryfallCard { Name = "Avacyn, Angel of Hope", ManaValue = 8 });
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Editable scan");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1], "card.png", contentType: "image/png"));
+        page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
+        Button(page, "Verify against Scryfall").Click();
+        page.WaitForAssertion(() => Assert.Contains("Found on Scryfall", page.Markup));
+        page.Find("[aria-label='Name from photo']").Input("Island");
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll(".verified-card")));
+        page.Find("[aria-label='Name from photo']").Change("Island");
+        Button(page, "Add confirmed card").Click();
+        page.WaitForAssertion(() => Assert.Equal("Island", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+
+    [Fact]
+    public void ShortScryfallQueriesAreNotSentAndEmptySearchesKeepManualEntry()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult([]);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("No matches");
+        Button(page, "Create deck").Click();
+        page.Find("[aria-label='Card name']").Input("A");
+        Assert.DoesNotContain(context.JSInterop.Invocations,
+            i => i.Identifier == "spellbookScryfall.autocomplete");
+
+        page.Find("[aria-label='Card name']").Input("Avacy");
+        page.WaitForAssertion(() => Assert.Contains("No suggestions", page.Markup),
+            timeout: TimeSpan.FromSeconds(4));
+        Assert.Empty(page.FindAll(".card-suggestions"));
+
+        page.Find("[aria-label='Card name']").Change("Avacyn, Angel of Hope");
+        Button(page, "Add").Click();
+        page.WaitForAssertion(() => Assert.Equal(
+            "Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
+
+    [Fact]
+    public async Task ScryfallSuggestionClickChoosesCanonicalName()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult(["Avacyn, Angel of Hope"]);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Chosen by lookup");
+        Button(page, "Create deck").Click();
+        await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Input("Avacy"));
+        page.WaitForAssertion(() => Assert.Contains("Avacyn, Angel of Hope", page.Find(".card-suggestions").TextContent),
+            timeout: TimeSpan.FromSeconds(4));
+
+        await page.InvokeAsync(() => Button(page, "Avacyn, Angel of Hope").Click());
+        page.WaitForAssertion(() =>
+        {
+            Assert.Empty(page.FindAll(".card-suggestions"));
+            Assert.Equal("Avacyn, Angel of Hope", page.Find("[aria-label='Card name']").GetAttribute("value"));
+        });
+        await page.InvokeAsync(() => Button(page, "Add").Click());
+        page.WaitForAssertion(() => Assert.Equal("Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();

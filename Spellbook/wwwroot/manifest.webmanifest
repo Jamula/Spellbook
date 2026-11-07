@@ -1,1 +1,19 @@
-{"name":"Spellbook Magic Deck Lab","short_name":"Spellbook","start_url":"/","display":"standalone","background_color":"#f7faf6","theme_color":"#e8f0e5"}
+{
+  "id": "/",
+  "name": "Spellbook Magic Deck Lab",
+  "short_name": "Spellbook",
+  "description": "A local-first Magic: The Gathering deck manager",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7faf6",
+  "theme_color": "#e8f0e5",
+  "icons": [
+    {
+      "src": "/icons/spellbook.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
