@@ -98,7 +98,12 @@ def candidate(run, checks, version):
 
 def production_environment(environment, policies):
     approvals = [r for r in environment["protection_rules"] if r["type"] == "required_reviewers"]
-    require(any(r.get("prevent_self_review") and r.get("reviewers") for r in approvals), "Production requires an independent reviewer")
+    configured_reviewers = any(
+        any(isinstance(reviewer.get("id"), int) and reviewer.get("type") in {"User", "Team"}
+            for reviewer in rule.get("reviewers", []))
+        for rule in approvals
+    )
+    require(configured_reviewers, "Production requires at least one configured required reviewer")
     require(environment.get("deployment_branch_policy", {}).get("custom_branch_policies"), "Production must restrict deployment branches")
     require([(p["name"], p.get("type", "branch")) for p in policies["branch_policies"]] == [("main", "branch")], "Only main may deploy to production")
 

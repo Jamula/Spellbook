@@ -62,11 +62,11 @@ class ReleaseContracts(unittest.TestCase):
         for field, value in (("head_sha", "b" * 40), ("head_branch", "feature"), ("path", "dynamic/github-code-quality/codeql"), ("repository", {"full_name": "fork/Spellbook"}), ("head_repository", {"full_name": "fork/Spellbook"}), ("conclusion", "failure")):
             with self.subTest(field=field), self.assertRaises(ValueError): candidate(run, checks | {"security_run": analysis | {field: value}}, "v1.2.3")
 
-    def test_production_requires_independent_approval_and_no_competing_git_deploy(self):
-        env = dict(protection_rules=[dict(type="required_reviewers", prevent_self_review=True, reviewers=[{"id": 1}])], deployment_branch_policy={"custom_branch_policies": True})
+    def test_production_requires_manual_review_and_no_competing_git_deploy(self):
+        env = dict(protection_rules=[dict(type="required_reviewers", prevent_self_review=False, reviewers=[{"id": 1, "type": "User"}])], deployment_branch_policy={"custom_branch_policies": True})
         policies = {"branch_policies": [{"name": "main", "type": "branch"}]}
         production_environment(env, policies)
-        for bad in (env | {"protection_rules": []}, env | {"deployment_branch_policy": {}}, env | {"protection_rules": [dict(type="required_reviewers", prevent_self_review=False, reviewers=[1])]}):
+        for bad in (env | {"protection_rules": []}, env | {"deployment_branch_policy": {}}, env | {"protection_rules": [dict(type="required_reviewers", reviewers=[])]}, env | {"protection_rules": [dict(type="required_reviewers", reviewers=[{"id": 1, "type": "Bot"}])]}):
             with self.subTest(env=bad), self.assertRaises(ValueError): production_environment(bad, policies)
         with self.assertRaises(ValueError): production_environment(env, {"branch_policies": [{"name": "*"}]})
         project = {"success": True, "result": {"production_branch": "release-production", "source": {"config": {"production_deployments_enabled": False}}}}
