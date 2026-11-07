@@ -300,7 +300,7 @@ public sealed class DeckEditorTests
             timeout: TimeSpan.FromSeconds(4));
         Assert.Empty(SavedDecks(context)[0].Cards);
         Button(page, "Lightning Bolt").Click();
-        Assert.Empty(page.FindAll(".card-suggestions"));
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll(".card-suggestions")));
         Button(page, "Add").Click();
         Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name);
 
