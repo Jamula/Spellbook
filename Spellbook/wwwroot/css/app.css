@@ -141,3 +141,11 @@ footer { text-align: center; padding: 28px; }
 .video-frame-review{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;margin:16px 0}
 .video-frame-review video{display:block;width:min(100%,600px);max-height:420px;border-radius:12px;background:#162219}
 .video-frame-review .muted{max-width:65ch;margin:0}
+
+/* Scanning is its own distinct, keyboard-accessible card-intake section. */
+.card-scan-panel{margin-top:24px;padding:18px;border:2px solid var(--border);border-radius:14px;background:#f1f6ef;min-width:0}
+.card-scan-panel>h3{margin:0 0 10px}
+.card-scan-panel>p{line-height:1.5}
+.card-scan-panel input[type=file]{width:100%;max-width:100%;background:#fff;position:static;opacity:1;min-height:44px}
+.card-scan-panel .scan-review{background:#fff}
+@media(max-width:600px){.card-scan-panel{padding:12px}}
