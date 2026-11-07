@@ -24,7 +24,9 @@ jobs:
       - name: Publish static site
         run: dotnet publish Spellbook/Spellbook.csproj --configuration Release --no-restore --output publish
       - name: Check deployable site exists
-        run: test -f publish/wwwroot/index.html && test -f publish/wwwroot/_framework/blazor.boot.json
+        run: |
+          test -s publish/wwwroot/index.html
+          test -s publish/wwwroot/_framework/blazor.webassembly.js
       - name: Upload static site
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
