@@ -86,8 +86,19 @@ test('iPhone WebKit opens in-app feedback modal without navigation or private da
   try {
     await openAppReady(page);
     await page.getByRole('button', { name: 'Send feedback' }).click();
-    const dialog = page.getByRole('dialog');
-    await dialog.waitFor();
+    // Inspect the real native dialog; WebKit's accessibility tree can lag behind it.
+    const dialog = page.locator('dialog.feedback-dialog');
+    await dialog.waitFor({ state: 'attached' });
+    await page.waitForFunction(() => document.querySelector('dialog.feedback-dialog')?.open === true,
+      { timeout: 10000 }).catch(async error => {
+      console.error('feedback modal state', await page.evaluate(() => ({
+        dialog: [...document.querySelectorAll('dialog.feedback-dialog')]
+          .map(d => ({ open: d.open, html: d.outerHTML.slice(0, 240) })),
+        status: [...document.querySelectorAll('[role=status]')].map(e => e.textContent),
+        loaded: Boolean(window.spellbookFeedback)
+      })));
+      throw error;
+    });
     assert.equal(await dialog.evaluate(element => element.open), true);
     await dialog.getByRole('textbox', { name: 'Title' }).fill('Scanner feedback');
     await dialog.getByRole('textbox', { name: 'Description and reproduction steps' })
