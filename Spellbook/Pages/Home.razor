@@ -354,12 +354,12 @@ else
             mediaMessage = "Photo exceeds 6 MB. Choose a smaller JPEG, PNG, or WebP image.";
             return;
         }
-        if (heic is not null && heic.Size > 20_000_000)
+        if (image is null && heic is not null && heic.Size > 20_000_000)
         {
             mediaMessage = "HEIC exceeds the 20 MB limit.";
             return;
         }
-        if (video is not null && video.Size > 250_000_000)
+        if (image is null && heic is null && video is not null && video.Size > 250_000_000)
         {
             mediaMessage = "Video exceeds the 250 MB limit.";
             return;
