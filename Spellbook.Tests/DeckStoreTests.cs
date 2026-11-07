@@ -11,10 +11,7 @@ public sealed class DeckStoreTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    [InlineData("null")]
-    [InlineData("not json")]
-    [InlineData("{}")]
-    public async Task LoadReturnsEmptyForMissingOrInvalidStorage(string? json)
+    public async Task LoadReturnsEmptyForMissingStorage(string? json)
     {
         var js = new StorageRuntime { StoredJson = json };
 
@@ -23,12 +20,25 @@ public sealed class DeckStoreTests
         Assert.Equal("spellbook.decks.v1", Assert.Single(js.LastArguments));
     }
 
+    [Theory]
+    [InlineData("null")]
+    [InlineData("not json")]
+    [InlineData("{}")]
+    public async Task LoadRejectsInvalidStorageWithoutSaving(string json)
+    {
+        var js = new StorageRuntime { StoredJson = json };
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => new DeckStore(js).LoadAsync());
+        Assert.Equal("spellbookStorage.get", js.LastCall);
+    }
+
     [Fact]
-    public async Task LoadReturnsEmptyWhenBrowserStorageIsUnavailable()
+    public async Task LoadRejectsUnavailableBrowserStorage()
     {
         var js = new StorageRuntime { Failure = new JSException("Storage unavailable") };
 
-        Assert.Empty(await new DeckStore(js).LoadAsync());
+        await Assert.ThrowsAsync<InvalidDataException>(() => new DeckStore(js).LoadAsync());
+        Assert.Equal("spellbookStorage.get", js.LastCall);
     }
 
     [Fact]
@@ -94,19 +104,20 @@ public sealed class DeckStoreTests
     {
         var store = new DeckStore(new StorageRuntime());
 
-        if (json == "null") Assert.Throws<InvalidDataException>(() => store.ParseImport(json));
-        else Assert.Throws<JsonException>(() => store.ParseImport(json));
+        if (json == "not json")
+            Assert.ThrowsAny<JsonException>(() => store.ParseImport(json));
+        else
+            Assert.Throws<InvalidDataException>(() => store.ParseImport(json));
     }
 
     [Fact]
-    public void ImportNormalizesMissingNamesAndCards()
+    public void ImportRejectsMissingRequiredNamesAndCards()
     {
         var store = new DeckStore(new StorageRuntime());
 
-        var deck = Assert.Single(store.ParseImport("[{\"name\":null,\"cards\":null}]"));
-
-        Assert.Equal("Imported deck", deck.Name);
-        Assert.Empty(deck.Cards);
+        Assert.Throws<InvalidDataException>(() => store.ParseImport("[{\"cards\":[]}]"));
+        Assert.Throws<InvalidDataException>(() => store.ParseImport("[{\"name\":null,\"cards\":[]}]"));
+        Assert.Throws<InvalidDataException>(() => store.ParseImport("[{\"name\":\"Imported deck\",\"cards\":null}]"));
         Assert.Empty(store.ParseImport("[]"));
     }
 
@@ -128,7 +139,7 @@ public sealed class DeckStoreTests
     public void ImportAcceptsBoundaryCardQuantities(int quantity)
     {
         var store = new DeckStore(new StorageRuntime());
-        var json = JsonSerializer.Serialize(new[] { new Deck { Cards = [new DeckCard { Quantity = quantity }] } });
+        var json = JsonSerializer.Serialize(new[] { new Deck { Cards = [new DeckCard { Name = "Card", Quantity = quantity }] } });
 
         Assert.Equal(quantity, Assert.Single(store.ParseImport(json)).CardCount);
     }
@@ -151,7 +162,7 @@ public sealed class DeckStoreTests
     public void ImportEnforcesCardsPerDeckLimit(int count, bool accepted)
     {
         var store = new DeckStore(new StorageRuntime());
-        var deck = new Deck { Cards = Enumerable.Range(0, count).Select(_ => new DeckCard()).ToList() };
+        var deck = new Deck { Cards = Enumerable.Range(0, count).Select(i => new DeckCard { Name = $"Card {i}" }).ToList() };
         var json = JsonSerializer.Serialize(new[] { deck });
 
         if (accepted) Assert.Equal(count, Assert.Single(store.ParseImport(json)).Cards.Count);

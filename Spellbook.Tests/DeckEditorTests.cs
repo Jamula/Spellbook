@@ -128,6 +128,34 @@ public sealed class DeckEditorTests
                 "spellbookStorage.download", "Blazor._internal.InputFile.init" }));
     }
 
+    [Fact]
+    public void RecoverUnreadableStorageAfterKeepingRawCopyAndConfirmingReplacement()
+    {
+        using var context = CreateContext("not json");
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("Saved decks could not be loaded.", page.Markup));
+
+        Button(page, "Download raw saved data").Click();
+        var rawDownload = Assert.Single(context.JSInterop.Invocations["spellbookStorage.download"]);
+        Assert.Equal("spellbook-recovery-raw.json", rawDownload.Arguments[0]);
+        Assert.Equal("not json", rawDownload.Arguments[1]);
+
+        var restore = page.FindComponents<InputFile>().Single();
+        Assert.True(restore.Find("input").HasAttribute("disabled"));
+        page.Find("input[type=checkbox]").Change(true);
+
+        restore.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
+        Assert.Contains("Recovery failed; original saved data was not intentionally replaced", page.Markup);
+        Assert.DoesNotContain(context.JSInterop.Invocations, call => call.Identifier == "spellbookStorage.set");
+
+        var recovered = new Deck { Name = "Recovered", Cards = [new DeckCard { Name = "Island" }] };
+        restore.UploadFiles(InputFileContent.CreateFromText(JsonSerializer.Serialize(new[] { recovered }), "backup.json"));
+
+        Assert.Contains("Restored 1 deck(s).", page.Markup);
+        Assert.Equal("Recovered", page.Find("h2").TextContent);
+        Assert.Equal("Recovered", Assert.Single(SavedDecks(context)).Name);
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();

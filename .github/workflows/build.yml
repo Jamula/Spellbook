@@ -26,7 +26,9 @@ jobs:
       - name: Check deployable site exists
         run: |
           test -s publish/wwwroot/index.html
+          test -d publish/wwwroot/_framework
           test -s publish/wwwroot/_framework/blazor.webassembly.js
+          test -n "$(find publish/wwwroot/_framework -maxdepth 1 -type f -print -quit)"
       - name: Upload static site
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
