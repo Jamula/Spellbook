@@ -550,6 +550,44 @@ public sealed class DeckEditorTests
         page.WaitForAssertion(() => Assert.Equal("Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
     }
 
+    [Theory]
+    [InlineData("Avacyn, Angel of Hope 5WWW\\nLegendary Creature", "Avacyn, Angel of Hope")]
+    [InlineData("Lightning Bolt {R}\\nInstant", "Lightning Bolt")]
+    [InlineData("Niv-Mizzet, Parun UURRR", "Niv-Mizzet, Parun")]
+    [InlineData("Seven Dwarves", "Seven Dwarves")]
+    [InlineData("2020 Vision", "2020 Vision")]
+    public void OcrTitleExtractorRemovesRecognizableManaSuffixOnly(string recognized, string expected)
+    {
+        Assert.Equal(expected, CardTitleExtractor.FromOcr(recognized.Replace("\\\\n", "\\n")));
+    }
+
+    [Fact]
+    public void ScanIsDistinctAndVerifiedCardLinksToCanonicalScryfall()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
+            .SetResult(new ScryfallCard
+            {
+                Name = "Avacyn, Angel of Hope",
+                ScryfallUrl = "https://scryfall.com/card/avr/6/avacyn-angel-of-hope",
+                ManaValue = 8
+            });
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Card links");
+        Button(page, "Create deck").Click();
+        Assert.Single(page.FindAll("section.card-scan-panel[aria-label='Scan a card']"));
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1], "card.png", contentType: "image/png"));
+        page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
+        Button(page, "Verify against Scryfall").Click();
+        page.WaitForAssertion(() => Assert.Equal(
+            "https://scryfall.com/card/avr/6/avacyn-angel-of-hope",
+            page.Find(".verified-card a").GetAttribute("href")));
+        Button(page, "Add confirmed card").Click();
+        Assert.Contains("scryfall.com/search?q=", page.Find(".card-row a").GetAttribute("href"));
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();
