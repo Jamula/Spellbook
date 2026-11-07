@@ -18,11 +18,8 @@ window.spellbookFeedback = (() => {
     }
     return scriptPromise;
   }
-  function ensureOpen(dialog) {
-    if (dialog && !dialog.open) dialog.showModal();
-  }
   async function open(dialog) {
-    ensureOpen(dialog);
+    dialog.showModal();
     token = null;
     try {
       const response = await fetch("/api/feedback", { credentials: "same-origin", cache: "no-store" });
@@ -66,5 +63,5 @@ window.spellbookFeedback = (() => {
       throw error;
     }
   }
-  return { open, close, submit, ensureOpen };
+  return { open, close, submit };
 })();
