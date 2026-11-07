@@ -488,6 +488,31 @@ public sealed class DeckEditorTests
             "Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
     }
 
+
+    [Fact]
+    public async Task ScryfallSuggestionClickChoosesCanonicalName()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult(["Avacyn, Angel of Hope"]);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Chosen by lookup");
+        Button(page, "Create deck").Click();
+        await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Input("Avacy"));
+        page.WaitForAssertion(() => Assert.Contains("Avacyn, Angel of Hope", page.Find(".card-suggestions").TextContent),
+            timeout: TimeSpan.FromSeconds(4));
+
+        await page.InvokeAsync(() => Button(page, "Avacyn, Angel of Hope").Click());
+        page.WaitForAssertion(() =>
+        {
+            Assert.Empty(page.FindAll(".card-suggestions"));
+            Assert.Equal("Avacyn, Angel of Hope", page.Find("[aria-label='Card name']").GetAttribute("value"));
+        });
+        await page.InvokeAsync(() => Button(page, "Add").Click());
+        page.WaitForAssertion(() => Assert.Equal("Avacyn, Angel of Hope", Assert.Single(SavedDecks(context)[0].Cards).Name));
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();
