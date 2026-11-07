@@ -91,6 +91,6 @@ public sealed class FeedbackLinkTests
         page.Find(".feedback-actions button:last-child").Click();
         page.WaitForAssertion(() => Assert.Contains("could not be submitted", page.Markup));
         Assert.Equal("Card scan incorrect", page.Find("#feedback-subject").GetAttribute("value"));
-        Assert.Contains("printed mana cost", page.Find("#feedback-details").TextContent);
+        Assert.Contains("printed mana cost", ((AngleSharp.Html.Dom.IHtmlTextAreaElement)page.Find("#feedback-details")).Value);
     }
 }
