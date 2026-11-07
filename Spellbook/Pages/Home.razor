@@ -351,6 +351,8 @@ else
         {
             var text = await JS.InvokeAsync<string>("spellbookMedia.recognize", photo);
             if (generation != scanGeneration) return;
+            // A new OCR result invalidates any earlier Scryfall verification for this photo.
+            InvalidateScanVerification();
             recognizedText = text.Trim();
             // OCR can mistake card names for other printed text. Every candidate must be confirmed.
             candidateName = recognizedText.Split('\n', StringSplitOptions.RemoveEmptyEntries)
