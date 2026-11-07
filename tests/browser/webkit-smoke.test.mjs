@@ -28,6 +28,16 @@ test('mobile WebKit loads Spellbook with PWA metadata and local icon', async () 
     assert.equal((await page.request.get('/icons/spellbook.svg')).status(), 200);
     assert.equal((await page.request.get('/icons/spellbook-192.png')).status(), 200);
     assert.equal((await page.request.get('/icons/spellbook-512.png')).status(), 200);
+    // A successful HTTP response does not prove an icon is a decodable image.
+    for (const size of [192, 512]) {
+      const dimensions = await page.evaluate(async size => {
+        const img = new Image();
+        img.src = `/icons/spellbook-${size}.png`;
+        await img.decode();
+        return [img.naturalWidth, img.naturalHeight];
+      }, size);
+      assert.deepEqual(dimensions, [size, size]);
+    }
     assert.equal(await page.locator('link[rel="apple-touch-icon"]').getAttribute('href'), 'icons/spellbook-192.png');
   } finally {
     await context.close();
