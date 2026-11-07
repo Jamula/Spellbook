@@ -80,7 +80,7 @@ else
                                 <button @onclick="ReadPhoto" disabled="@mediaBusy">@(mediaBusy ? "Reading photo…" : "Recognize text on device")</button>
                                 <button class="secondary" @onclick="ClearScan" disabled="@mediaBusy">Clear photo</button>
                                 <label>Card name (confirm or correct)
-                                    <input aria-label="Name from photo" maxlength="200" @bind="candidateName" @bind:event="oninput" @bind:after="ClearVerificationState" disabled="@mediaBusy" />
+                                    <input aria-label="Name from photo" maxlength="200" @bind="candidateName" @oninput="InvalidateScanVerification" disabled="@mediaBusy" />
                                 </label>
                                 <button class="secondary" @onclick="VerifyScannedCard" disabled="@mediaBusy">Verify against Scryfall</button>
                                 @if (!string.IsNullOrEmpty(verificationMessage)) { <p role="status" class="muted">@verificationMessage</p> }
