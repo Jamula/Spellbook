@@ -228,14 +228,6 @@ else
         }
     }
 
-    private sealed class ScryfallCard
-    {
-        public string Name { get; set; } = "";
-        public double ManaValue { get; set; }
-        public string TypeLine { get; set; } = "";
-        public string? ImageUrl { get; set; }
-    }
-
     private async Task AddCard()
     {
         if (selected is null || string.IsNullOrWhiteSpace(cardName) || quantity < 1 || quantity > 250) return;
