@@ -44,17 +44,24 @@ window.spellbookFeedback = (() => {
   }
   async function submit(kind, title, details) {
     if (!token) throw new Error("Complete the spam prevention challenge before submitting");
-    const response = await fetch("/api/feedback", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind, title, details, token })
-    });
-    if (!response.ok) throw new Error("Feedback endpoint could not accept the request");
-    const result = await response.json();
-    if (typeof result.issueUrl !== "string") throw new Error("Missing GitHub issue link");
-    token = null;
-    return result.issueUrl;
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, title, details, token })
+      });
+      if (!response.ok) throw new Error("Feedback endpoint could not accept the request");
+      const result = await response.json();
+      if (typeof result.issueUrl !== "string") throw new Error("Missing GitHub issue link");
+      token = null;
+      return result.issueUrl;
+    } catch (error) {
+      // Siteverify consumes tokens even when GitHub later fails. Never reuse one.
+      token = null;
+      if (widget !== undefined && window.turnstile) window.turnstile.reset(widget);
+      throw error;
+    }
   }
   return { open, close, submit };
 })();
