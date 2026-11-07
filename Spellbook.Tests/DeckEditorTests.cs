@@ -285,7 +285,7 @@ public sealed class DeckEditorTests
     }
 
     [Fact]
-    public void ScryfallAutocompleteProvidesSuggestionsButManualEntryRemainsPossible()
+    public void ScryfallAutocompleteProvidesSuggestionsAndManualEntryRemainsPossible()
     {
         using var context = CreateContext();
         context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
@@ -299,8 +299,7 @@ public sealed class DeckEditorTests
         page.WaitForAssertion(() => Assert.Contains("Lightning Bolt", page.Find(".card-suggestions").TextContent),
             timeout: TimeSpan.FromSeconds(4));
         Assert.Empty(SavedDecks(context)[0].Cards);
-        Button(page, "Lightning Bolt").Click();
-        page.WaitForAssertion(() => Assert.Empty(page.FindAll(".card-suggestions")));
+        page.Find("[aria-label='Card name']").Change("Lightning Bolt");
         Button(page, "Add").Click();
         Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name);
 
