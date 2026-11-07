@@ -156,6 +156,134 @@ public sealed class DeckEditorTests
         Assert.Equal("Recovered", Assert.Single(SavedDecks(context)).Name);
     }
 
+    [Fact]
+    public void LocalPhotoPreviewRequiresUserConfirmationBeforeAddingToDeck()
+    {
+        using var context = CreateContext();
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Photo deck");
+        Button(page, "Create deck").Click();
+
+        var media = page.FindComponents<InputFile>()[1];
+        media.UploadFiles(InputFileContent.CreateFromBinary([1, 2, 3, 4], "card.jpg", contentType: "image/jpeg"));
+
+        Assert.Contains("Selected: card.jpg", page.Markup);
+        Assert.Equal("data:image/jpeg;base64,AQIDBA==", page.Find(".scan-preview").GetAttribute("src"));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+
+        page.Find("[aria-label='Name from photo']").Change("Lightning Bolt");
+        Button(page, "Add confirmed card").Click();
+        Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name);
+        Assert.Equal(1, Assert.Single(SavedDecks(context)[0].Cards).Quantity);
+
+        Button(page, "Clear photo").Click();
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Assert.DoesNotContain("Selected: card.jpg", page.Markup);
+    }
+
+    [Fact]
+    public void PhotoOcrRequiresReviewAndNeverAddsCardWithoutConfirmation()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.recognize", _ => true)
+            .SetResult("Lightning Bolt\nInstant\nDeal 3 damage");
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("OCR deck");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "bolt.png", contentType: "image/png"));
+        Button(page, "Recognize text on device").Click();
+        page.WaitForAssertion(() => Assert.Equal("Lightning Bolt", page.Find("[aria-label='Name from photo']").GetAttribute("value")));
+        Assert.Contains("Deal 3 damage", page.Markup);
+        Assert.Empty(SavedDecks(context)[0].Cards);
+
+        page.Find("[aria-label='Name from photo']").Change(" ");
+        Button(page, "Add confirmed card").Click();
+        Assert.Contains("Enter a valid card name", page.Markup);
+        Assert.Empty(SavedDecks(context)[0].Cards);
+
+        page.Find("[aria-label='Name from photo']").Change("Lightning Bolt");
+        Button(page, "Add confirmed card").Click();
+        Assert.Equal("Lightning Bolt", Assert.Single(SavedDecks(context)[0].Cards).Name);
+    }
+
+    [Fact]
+    public void PhotoPickerRejectsUnsupportedOrOversizedMediaWithoutChangingDeck()
+    {
+        using var context = CreateContext();
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Media deck");
+        Button(page, "Create deck").Click();
+        var media = page.FindComponents<InputFile>()[1];
+
+        media.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
+        Assert.Contains("No supported image selected", page.Markup);
+        Assert.Empty(page.FindAll(".scan-preview"));
+
+        media.UploadFiles(InputFileContent.CreateFromBinary(new byte[6_000_001], "big.jpg", contentType: "image/jpeg"));
+        Assert.Contains("Photo exceeds 6 MB", page.Markup);
+        Assert.Empty(page.FindAll(".scan-preview"));
+
+        media.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "valid.webp", contentType: "image/webp"));
+        Assert.Single(page.FindAll(".scan-preview"));
+        media.UploadFiles(InputFileContent.CreateFromBinary([3, 4], "unsupported.heic", contentType: "image/heic"));
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+    }
+
+    [Fact]
+    public void OcrWithNoUsableTitleAllowsManualCorrection()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.recognize", _ => true).SetResult("\n ");
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Manual correction");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1], "blur.jpg", contentType: "image/jpeg"));
+        Button(page, "Recognize text on device").Click();
+        page.WaitForAssertion(() => Assert.Contains("Enter the card name yourself", page.Markup));
+        Assert.Empty(SavedDecks(context)[0].Cards);
+        page.Find("[aria-label='Name from photo']").Change("Island");
+        Button(page, "Add confirmed card").Click();
+        Assert.Equal("Island", Assert.Single(SavedDecks(context)[0].Cards).Name);
+    }
+
+    [Fact]
+    public void SwitchingDecksByCreationDeletionOrImportDiscardsPendingPhoto()
+    {
+        using var context = CreateContext();
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Initial");
+        Button(page, "Create deck").Click();
+        var picker = page.FindComponents<InputFile>()[1];
+        picker.UploadFiles(InputFileContent.CreateFromBinary([1], "initial.jpg", contentType: "image/jpeg"));
+        Assert.Single(page.FindAll(".scan-preview"));
+
+        page.Find("[aria-label='New deck name']").Change("Next deck");
+        Button(page, "Create deck").Click();
+        Assert.Empty(page.FindAll(".scan-preview"));
+
+        picker.UploadFiles(InputFileContent.CreateFromBinary([2], "next.jpg", contentType: "image/jpeg"));
+        Assert.Single(page.FindAll(".scan-preview"));
+        Button(page, "Delete deck").Click();
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Assert.Equal("Initial", page.Find("h2").TextContent);
+
+        picker.UploadFiles(InputFileContent.CreateFromBinary([3], "third.jpg", contentType: "image/jpeg"));
+        Assert.Single(page.FindAll(".scan-preview"));
+        var imported = new Deck { Name = "Imported deck" };
+        page.FindComponents<InputFile>()[0].UploadFiles(
+            InputFileContent.CreateFromText(JsonSerializer.Serialize(new[] { imported }), "new.json"));
+        Assert.Empty(page.FindAll(".scan-preview"));
+        Assert.Equal("Imported deck", page.Find("h2").TextContent);
+    }
+
     private static BunitContext CreateContext(string? storedJson = null)
     {
         var context = new BunitContext();
