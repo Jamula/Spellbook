@@ -39,43 +39,86 @@ else
                 <label>Deck name<input maxlength="160" @bind="selected.Name" @bind:after="Persist" /></label>
                 <label>Game format<select @bind="selected.Format" @bind:after="Persist"><option>Casual 60-card</option><option>Two-Headed Giant</option><option>Standard</option><option>Modern</option><option>Commander</option><option>Other</option></select></label>
                 <h3>Add a card</h3>
-                <div class="toolbar"><input aria-label="Card name" placeholder="Exact card name" @bind="cardName" @onkeydown="HandleEnter" /><input class="qty" type="number" min="1" max="250" aria-label="Quantity" @bind="quantity" /><button @onclick="AddCard">Add</button></div>
-                <p class="muted">Use the printed card name. Card recognition and automatic lookup are coming later.</p>
+                <div class="toolbar"><input aria-label="Card name" placeholder="Search Magic cards" @bind="cardName" @oninput="CardTyping" @onkeydown="HandleEnter" autocomplete="off" /><input class="qty" type="number" min="1" max="250" aria-label="Quantity" @bind="quantity" /><button @onclick="AddCard">Add</button></div>
+                @if (suggestions.Count > 0)
+                {
+                    <div class="card-suggestions" aria-label="Card suggestions">
+                        @foreach (var name in suggestions)
+                        {
+                            <button class="card-suggestion" @onclick="() => ChooseSuggestion(name)">@name</button>
+                        }
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(searchMessage)) { <p class="muted" role="status">@searchMessage</p> }
+                <p class="muted">Suggestions powered by <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer">Scryfall</a>. Typing sends only your search text to Scryfall. Manual entry works offline.</p>
                 <h3>Main deck · @selected.CardCount cards</h3>
                 <div class="card-rows">
                 @foreach (var card in selected.Cards.OrderBy(c => c.Name).ToList())
                 {
-                    <div class="card-row"><span>@card.Name</span><div class="row-actions"><button aria-label="Decrease quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @card.Name" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
+                    <div class="card-row"><span><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @card.Name on Scryfall">@card.Name</a></span><div class="row-actions"><button aria-label="Decrease quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @card.Name" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
                 }
                 </div>
-                <h3>Scan a card from a photo</h3>
-                <p>Take a clear photo of one card or choose an existing image. Your image stays in this browser; recognition runs on your device after you press the button. OCR software and language data are downloaded from a third-party CDN on first use, but the photo is not sent to an OCR service.</p>
-                <InputFile OnChange="MediaSelected" accept="image/*,video/*" multiple />
-                @if (mediaNames.Count > 0) { <p role="status">Selected: @string.Join(", ", mediaNames)</p> }
-                @if (!string.IsNullOrEmpty(mediaMessage)) { <p role="status" class="note">@mediaMessage</p> }
-                @if (!string.IsNullOrEmpty(previewDataUrl))
-                {
-                    <div class="scan-review">
-                        <img class="scan-preview" alt="Selected local card photo for review" src="@previewDataUrl" />
-                        <div class="scan-actions">
-                            <button @onclick="ReadPhoto" disabled="@mediaBusy">@(mediaBusy ? "Reading photo…" : "Recognize text on device")</button>
-                            <button class="secondary" @onclick="ClearScan" disabled="@mediaBusy">Clear photo</button>
-                            <label>Card name (confirm or correct)
-                                <input aria-label="Name from photo" maxlength="200" @bind="candidateName" disabled="@mediaBusy" />
-                            </label>
-                            <button @onclick="ConfirmScannedCard" disabled="@mediaBusy">Add confirmed card</button>
-                            @if (!string.IsNullOrWhiteSpace(recognizedText))
-                            {
-                                <details><summary>Review extracted text</summary><pre class="scan-text">@recognizedText</pre></details>
-                            }
+                <section class="card-scan-panel" aria-label="Scan a card">
+                    <h3>Scan a card from a photo or video</h3>
+                    <p>Choose a photo, an iPhone HEIC image, or a video. For a video, scrub to the frame you want and tap Capture frame. Your media stays on this device; OCR runs locally. HEIC conversion and OCR libraries may be downloaded from a CDN on first use; media is not uploaded.</p>
+                    <InputFile id="card-media-picker" OnChange="MediaSelected" accept="image/*,.heic,.heif,video/*" multiple />
+                    @if (!string.IsNullOrEmpty(videoUrl))
+                    {
+                        <div class="video-frame-review">
+                            <video id="card-video-preview" src="@videoUrl" controls playsinline preload="metadata" aria-label="Selected video: scrub to the frame showing the card"></video>
+                            <button @onclick="CaptureVideoFrame" disabled="@mediaBusy">Capture selected video frame</button>
+                            <p class="muted">Pause or scrub to the card's clearest frame, wait for it to load, then capture. You can capture again before confirming the card.</p>
                         </div>
-                    </div>
-                }
+                    }
+                    @if (mediaNames.Count > 0) { <p role="status">Selected: @string.Join(", ", mediaNames)</p> }
+                    @if (!string.IsNullOrEmpty(mediaMessage)) { <p role="status" class="note">@mediaMessage</p> }
+                    @if (!string.IsNullOrEmpty(previewDataUrl))
+                    {
+                        <div class="scan-review">
+                            <img class="scan-preview" alt="Selected local card photo for review" src="@previewDataUrl" />
+                            <div class="scan-actions">
+                                <button @onclick="ReadPhoto" disabled="@mediaBusy">@(mediaBusy ? "Reading photo…" : "Recognize text on device")</button>
+                                <button class="secondary" @onclick="ClearScan" disabled="@mediaBusy">Clear photo</button>
+                                <label>Card name (confirm or correct)
+                                    <input aria-label="Name from photo" maxlength="200" @bind="candidateName" @oninput="InvalidateScanVerification" disabled="@mediaBusy" />
+                                </label>
+                                <button class="secondary" @onclick="VerifyScannedCard" disabled="@mediaBusy">Verify against Scryfall</button>
+                                @if (!string.IsNullOrEmpty(verificationMessage)) { <p role="status" class="muted">@verificationMessage</p> }
+                                @if (verifiedScan is not null)
+                                {
+                                    <div class="verified-card">
+                                        @if (!string.IsNullOrEmpty(verifiedScan.ImageUrl))
+                                        {
+                                            <img alt="Scryfall image of @verifiedScan.Name" loading="lazy" src="@verifiedScan.ImageUrl" />
+                                        }
+                                        <div><strong>@verifiedScan.Name</strong><p>@verifiedScan.TypeLine · mana value @verifiedScan.ManaValue</p>
+                                            @if (IsScryfallLink(verifiedScan.ScryfallUrl))
+                                            {
+                                                <a href="@verifiedScan.ScryfallUrl" target="_blank" rel="noopener noreferrer">View card on Scryfall ↗</a>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                                <button @onclick="ConfirmScannedCard" disabled="@mediaBusy">Add confirmed card</button>
+                                @if (!string.IsNullOrWhiteSpace(recognizedText))
+                                {
+                                    <details><summary>Review extracted text</summary><pre class="scan-text">@recognizedText</pre></details>
+                                }
+                            </div>
+                        </div>
+                    }
+                    </section>
             </section>
         }
     </div>
 }
 @code {
+    private static string ScryfallCardSearchUrl(string name) =>
+        "https://scryfall.com/search?q=" + Uri.EscapeDataString("!" + "\"" + name + "\"");
+    private static bool IsScryfallLink(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        uri.Host.Equals("scryfall.com", StringComparison.OrdinalIgnoreCase);
     private List<Deck> decks = [];
     private Deck? selected;
     private bool loaded;
@@ -84,10 +127,17 @@ else
     private string lastSavedName = "";
     private string newDeckName = "";
     private string cardName = "";
+    private List<string> suggestions = [];
+    private string searchMessage = "";
+    private int searchGeneration;
+    private ScryfallCard? verifiedScan;
+    private string verificationMessage = "";
+    private string? lastVerifiedName;
     private int quantity = 1;
     private string message = "";
     private List<string> mediaNames = [];
     private string? previewDataUrl;
+    private string? videoUrl;
     private string candidateName = "";
     private string recognizedText = "";
     private string mediaMessage = "";
@@ -133,13 +183,82 @@ else
         decks.Remove(selected); selected = decks.FirstOrDefault(); lastSavedName = selected?.Name ?? "";
         await Persist();
     }
+    private async Task CardTyping(ChangeEventArgs e)
+    {
+        cardName = e.Value?.ToString() ?? "";
+        var generation = ++searchGeneration;
+        suggestions.Clear();
+        searchMessage = "";
+        if (cardName.Trim().Length < 2) return;
+        try
+        {
+            await Task.Delay(350);
+            if (generation != searchGeneration) return;
+            var result = await JS.InvokeAsync<string[]>("spellbookScryfall.autocomplete", cardName.Trim());
+            if (generation != searchGeneration) return;
+            suggestions = result.Take(10).ToList();
+            searchMessage = suggestions.Count == 0 ? "No suggestions. You can still add the name manually." : "";
+        }
+        catch (JSException)
+        {
+            if (generation != searchGeneration) return;
+            searchMessage = "Scryfall is unavailable. You can enter the card manually.";
+        }
+        finally
+        {
+            if (generation == searchGeneration) await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ChooseSuggestion(string name)
+    {
+        cardName = name;
+        suggestions.Clear();
+        searchGeneration++;
+        searchMessage = "";
+    }
+
+    private void InvalidateScanVerification(ChangeEventArgs _) => ClearVerificationState();
+
+    private void ClearVerificationState()
+    {
+        verifiedScan = null;
+        lastVerifiedName = null;
+        verificationMessage = "";
+    }
+
+    private async Task VerifyScannedCard()
+    {
+        verifiedScan = null;
+        lastVerifiedName = null;
+        verificationMessage = "";
+        if (mediaBusy || previewDataUrl is null || string.IsNullOrWhiteSpace(candidateName)) return;
+        var lookupName = candidateName.Trim();
+        var generation = scanGeneration;
+        try
+        {
+            var result = await JS.InvokeAsync<ScryfallCard?>("spellbookScryfall.exact", lookupName);
+            if (generation != scanGeneration || !string.Equals(lookupName, candidateName.Trim(), StringComparison.Ordinal)) return;
+            verifiedScan = result;
+            lastVerifiedName = result is null ? null : lookupName;
+            verificationMessage = result is null
+                ? "No exact Scryfall match. Correct the name or add it manually."
+                : "Found on Scryfall. Compare the card image and confirm before adding.";
+        }
+        catch (JSException)
+        {
+            if (generation != scanGeneration) return;
+            verificationMessage = "Card lookup unavailable. You may still add the name manually.";
+        }
+    }
+
     private async Task AddCard()
     {
         if (selected is null || string.IsNullOrWhiteSpace(cardName) || quantity < 1 || quantity > 250) return;
         var existing = selected.Cards.FirstOrDefault(c => string.Equals(c.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase));
         if (existing is not null) existing.Quantity = Math.Min(250, existing.Quantity + quantity);
         else selected.Cards.Add(new DeckCard { Name = cardName.Trim(), Quantity = quantity });
-        cardName = ""; quantity = 1; await Persist();
+        cardName = ""; quantity = 1; suggestions.Clear(); searchGeneration++; await Persist();
     }
     private Task HandleEnter(KeyboardEventArgs e) => e.Key == "Enter" ? AddCard() : Task.CompletedTask;
     private async Task ChangeQuantity(DeckCard card, int delta)
@@ -218,31 +337,95 @@ else
         mediaNames = files.Select(f => f.Name).ToList();
         if (files.Count == 0) return;
         var image = files.FirstOrDefault(f => f.ContentType is "image/jpeg" or "image/png" or "image/webp");
-        if (image is null)
+        var heic = files.FirstOrDefault(f => f.ContentType is "image/heic" or "image/heif" ||
+            f.Name.EndsWith(".heic", StringComparison.OrdinalIgnoreCase) ||
+            f.Name.EndsWith(".heif", StringComparison.OrdinalIgnoreCase));
+        var video = files.FirstOrDefault(f => f.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
+            f.Name.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) ||
+            f.Name.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
+            f.Name.EndsWith(".m4v", StringComparison.OrdinalIgnoreCase));
+        if (image is null && heic is null && video is null)
         {
-            mediaMessage = "No supported image selected. Video frame selection and HEIC conversion are not available yet.";
+            mediaMessage = "Select a JPEG, PNG, WebP, HEIC/HEIF photo, or supported video.";
             return;
         }
-        if (image.Size > 6_000_000)
+        if (image is not null && image.Size > 6_000_000)
         {
-            mediaMessage = "Photo exceeds 6 MB. Please choose or capture a smaller JPEG, PNG, or WebP photo.";
+            mediaMessage = "Photo exceeds 6 MB. Choose a smaller JPEG, PNG, or WebP image.";
+            return;
+        }
+        if (image is null && heic is not null && heic.Size > 20_000_000)
+        {
+            mediaMessage = "HEIC exceeds the 20 MB limit.";
+            return;
+        }
+        if (image is null && heic is null && video is not null && video.Size > 250_000_000)
+        {
+            mediaMessage = "Video exceeds the 250 MB limit.";
             return;
         }
         try
         {
-            using var stream = image.OpenReadStream(6_000_000);
-            using var buffer = new MemoryStream();
-            await stream.CopyToAsync(buffer);
-            if (generation != scanGeneration) return;
-            previewDataUrl = $"data:{image.ContentType};base64,{Convert.ToBase64String(buffer.ToArray())}";
+            if (image is not null)
+            {
+                using var stream = image.OpenReadStream(6_000_000);
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer);
+                if (generation != scanGeneration) return;
+                previewDataUrl = $"data:{image.ContentType};base64,{Convert.ToBase64String(buffer.ToArray())}";
+            }
+            else if (heic is not null)
+            {
+                var converted = await JS.InvokeAsync<string>("spellbookMedia.convertHeic", "card-media-picker");
+                if (generation != scanGeneration) return;
+                if (!converted.StartsWith("data:image/jpeg;base64,", StringComparison.Ordinal))
+                    throw new InvalidDataException("HEIC conversion did not return a JPEG preview.");
+                previewDataUrl = converted;
+            }
+            else
+            {
+                var prepared = await JS.InvokeAsync<string>("spellbookMedia.prepareVideo", "card-media-picker");
+                if (generation != scanGeneration) return;
+                if (!prepared.StartsWith("blob:", StringComparison.Ordinal))
+                    throw new InvalidDataException("Video preview is unavailable.");
+                videoUrl = prepared;
+                mediaMessage = "Scrub the video to the card, then capture that frame for recognition.";
+                return;
+            }
             mediaMessage = "Preview ready. Recognition is optional, and nothing is added until you confirm.";
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or JSException)
         {
             if (generation != scanGeneration) return;
             previewDataUrl = null;
-            mediaMessage = "Could not read the photo on this device. Try a smaller image.";
+            videoUrl = null;
+            mediaMessage = "Media could not be processed locally on this device. Try another file.";
         }
+    }
+
+    private async Task CaptureVideoFrame()
+    {
+        if (string.IsNullOrEmpty(videoUrl) || mediaBusy) return;
+        var generation = scanGeneration;
+        mediaBusy = true;
+        try
+        {
+            var jpeg = await JS.InvokeAsync<string>("spellbookMedia.captureFrame", "card-video-preview");
+            if (generation != scanGeneration) return;
+            if (!jpeg.StartsWith("data:image/jpeg;base64,", StringComparison.Ordinal))
+                throw new InvalidDataException("Video capture did not return a JPEG frame.");
+            previewDataUrl = jpeg;
+            candidateName = "";
+            recognizedText = "";
+            ClearVerificationState();
+            mediaMessage = "Frame captured. Recognize the text or enter the card name manually.";
+        }
+        catch (Exception ex) when (ex is JSException or InvalidDataException)
+        {
+            if (generation != scanGeneration) return;
+            mediaMessage = "Could not capture this frame. Pause the video and wait for the image to load.";
+        }
+        finally { mediaBusy = false; }
     }
 
     private async Task ReadPhoto()
@@ -256,11 +439,11 @@ else
         {
             var text = await JS.InvokeAsync<string>("spellbookMedia.recognize", photo);
             if (generation != scanGeneration) return;
+            // A new OCR result invalidates any earlier Scryfall verification for this photo.
+            ClearVerificationState();
             recognizedText = text.Trim();
             // OCR can mistake card names for other printed text. Every candidate must be confirmed.
-            candidateName = recognizedText.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .Select(line => line.Trim().Trim('\r'))
-                .FirstOrDefault(line => line.Length is >= 2 and <= 200) ?? "";
+            candidateName = Spellbook.Services.CardTitleExtractor.FromOcr(recognizedText);
             mediaMessage = string.IsNullOrWhiteSpace(candidateName)
                 ? "No readable card title found. Enter the card name yourself."
                 : "Review and correct the proposed card name before adding it.";
@@ -284,12 +467,16 @@ else
             mediaMessage = "Enter a valid card name (1–200 characters) before adding.";
             return;
         }
-        cardName = candidateName.Trim();
+        cardName = verifiedScan is not null && string.Equals(lastVerifiedName, candidateName.Trim(), StringComparison.Ordinal)
+            ? verifiedScan.Name : candidateName.Trim();
         quantity = 1;
         await AddCard();
         mediaMessage = "Confirmed card added to the selected deck.";
         candidateName = "";
         recognizedText = "";
+        verifiedScan = null;
+        lastVerifiedName = null;
+        verificationMessage = "";
     }
 
     private void ClearScan()
@@ -297,8 +484,13 @@ else
         scanGeneration++;
         mediaNames.Clear();
         previewDataUrl = null;
+        if (videoUrl is not null) _ = JS.InvokeVoidAsync("spellbookMedia.releaseVideo");
+        videoUrl = null;
         candidateName = "";
         recognizedText = "";
+        verifiedScan = null;
+        lastVerifiedName = null;
+        verificationMessage = "";
         mediaMessage = "";
     }
 }
