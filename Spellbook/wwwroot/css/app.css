@@ -128,3 +128,8 @@ footer { text-align: center; padding: 28px; }
 .scan-actions label{width:100%}.scan-actions label input{width:100%}
 .scan-actions details{width:100%}.scan-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}
 @media(max-width:600px){.scan-review{grid-template-columns:1fr}.scan-preview{max-height:320px;margin:auto}}
+
+/* Safari: present the native Files picker directly rather than a zero-opacity absolute overlay. */
+.import-picker { display: flex; flex-direction: column; gap: 6px; flex: 1 1 230px; min-width: 0; }
+.import-picker > label { color: var(--muted); font-size: .875rem; font-weight: 650; }
+.import-picker input[type=file] { display: block; position: static; opacity: 1; width: 100%; max-width: 100%; min-height: 44px; padding: 6px; background: #fff; }
