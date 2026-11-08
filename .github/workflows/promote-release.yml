@@ -1,0 +1,122 @@
+name: Promote or roll back release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published immutable release tag (also selects prior version for rollback)
+        required: true
+        type: string
+      commit:
+        description: Exact 40-character commit from the reviewed release evidence
+        required: true
+        type: string
+      operation:
+        description: Intent recorded in the deployment summary
+        type: choice
+        options: [promote, rollback]
+        default: promote
+      previous_version:
+        description: Current known-good production release tag, or FIRST for initial activation
+        required: true
+        type: string
+
+concurrency:
+  group: spellbook-production
+  cancel-in-progress: false
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Require protected production and configured reviewer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$GH_REPO/environments/production" > environment.json
+          gh api "repos/$GH_REPO/environments/production/deployment-branch-policies" > policies.json
+          python3 .github/release-tools/release.py environment environment.json policies.json
+
+  deploy:
+    needs: preflight
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ inputs.version }}
+      SOURCE_SHA: ${{ inputs.commit }}
+      PREVIOUS: ${{ inputs.previous_version }}
+      OPERATION: ${{ inputs.operation }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Require published immutable release and retained rollback artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          gh api "repos/$GH_REPO/releases/tags/$VERSION" > release.json
+          jq -e '.draft == false and .immutable == true' release.json
+          digest=$(jq -er '.assets[] | select(.name == "spellbook-site.zip") | .digest | select(startswith("sha256:"))' release.json)
+          gh release download "$VERSION" --pattern spellbook-site.zip --dir release-bundle
+          python3 .github/release-tools/release.py verify release-bundle/spellbook-site.zip "$SOURCE_SHA" --digest "$digest" --version "$VERSION" --destination .github/release-site
+          test "$(gh api "repos/$GH_REPO/commits/$VERSION" --jq .sha)" = "$SOURCE_SHA"
+          source_run=$(jq -r .run_id .github/release-site/release-manifest.json)
+          gh api "repos/$GH_REPO/actions/runs/$source_run" > run.json
+          bash .github/release-tools/security-evidence.sh "$SOURCE_SHA"
+          test "$(python3 .github/release-tools/release.py candidate run.json security-evidence.json "$VERSION")" = "$SOURCE_SHA"
+          if [ "$PREVIOUS" != FIRST ]; then
+            [[ "$PREVIOUS" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]
+            gh api "repos/$GH_REPO/releases/tags/$PREVIOUS" > previous.json
+            jq -e '.draft == false and .immutable == true and any(.assets[]; .name == "spellbook-site.zip")' previous.json
+            previous_sha=$(gh api "repos/$GH_REPO/commits/$PREVIOUS" --jq .sha)
+            previous_digest=$(jq -er '.assets[] | select(.name == "spellbook-site.zip") | .digest | select(startswith("sha256:"))' previous.json)
+            gh release download "$PREVIOUS" --pattern spellbook-site.zip --dir previous-bundle
+            python3 .github/release-tools/release.py verify previous-bundle/spellbook-site.zip "$previous_sha" --digest "$previous_digest" --version "$PREVIOUS"
+          fi
+      - name: Install locked browser gate and deploy tooling
+        working-directory: .github/release-tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install Chromium
+        working-directory: .github/release-tools
+        run: npx playwright install --with-deps chromium
+      - name: Test selected artifact before production changes
+        working-directory: .github/release-tools
+        run: npx playwright test
+      - name: Verify production bypass is disabled and upload exact artifact
+        working-directory: .github/release-tools
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PROJECT: spellbook
+          WRANGLER_SEND_METRICS: 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]]
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CLOUDFLARE_PROJECT" > project.json
+          python3 release.py hosting project.json
+          npx --no-install wrangler pages deploy ../release-site --project-name "$CLOUDFLARE_PROJECT" \
+            --branch release-production --commit-hash "$SOURCE_SHA" --commit-message "$VERSION ($OPERATION)" --commit-dirty=false
+      - name: Record production and rollback evidence
+        run: |
+          printf 'Operation: %s\nVersion: %s\nCommit: %s\nPrior version: %s\n' "$OPERATION" "$VERSION" "$SOURCE_SHA" "$PREVIOUS" >> "$GITHUB_STEP_SUMMARY"
+          printf 'The selected immutable artifact passed the saved-data browser gate. Verify the deployment URL and public domain before declaring rollout complete.\n' >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "description": "Local-only release artifact browser gates; no telemetry or application dependencies",
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "wrangler": "4.158.0"
+  }
+}
