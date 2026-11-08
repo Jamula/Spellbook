@@ -131,7 +131,7 @@ jobs:
       - name: Check application coverage is at least 97%
         run: |
           cp coverage/coverage.cobertura.xml coverage.cobertura.xml
-          python3 .github/scripts/check-coverage.py coverage.cobertura.xml
+          dotnet run --project .github/scripts/CoverageChecker/CoverageChecker.csproj --configuration Release -- coverage.cobertura.xml
       - name: Save test and coverage diagnostics
         if: ${{ !cancelled() && hashFiles('coverage/**/*.trx', 'coverage/**/coverage.cobertura.xml', 'coverage.cobertura.xml') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
