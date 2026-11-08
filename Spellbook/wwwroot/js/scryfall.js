@@ -39,9 +39,15 @@ window.spellbookScryfall = (() => {
   async function autocomplete(query) {
     const q = String(query || "").trim();
     if (q.length < 2 || q.length > 160) return [];
-    const body = await cached("a:" + q.toLowerCase(),
-      "/cards/autocomplete?q=" + encodeURIComponent(q));
-    return Array.isArray(body?.data) ? body.data.slice(0, 10) : [];
+    // Scryfall's autocomplete endpoint favors name prefixes. A name search
+    // finds the same term anywhere in the card name, e.g. "Angel" also finds
+    // "Baneslayer Angel". Quote the term so user input stays a name phrase,
+    // not additional Scryfall search syntax.
+    const phrase = `name:"${q.replace(/[\\"]/g, "\\$&")}"`;
+    const body = await cached("n:" + q.toLowerCase(),
+      "/cards/search?q=" + encodeURIComponent(phrase) + "&unique=cards&order=name");
+    if (!Array.isArray(body?.data)) return [];
+    return [...new Set(body.data.map(card => card?.name).filter(name => typeof name === "string"))].slice(0, 10);
   }
   async function exact(name) {
     const n = String(name || "").trim();
