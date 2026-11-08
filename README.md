@@ -32,9 +32,8 @@ The deployable static site is `publish/wwwroot`. Cloudflare Pages builds can run
 Run the component workflow, persistence, import validation, export, and card-count tests with:
 
 ```bash
-dotnet test Spellbook.Tests/Spellbook.Tests.csproj -c Release --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory coverage
-cp coverage/*/coverage.cobertura.xml coverage.cobertura.xml
-python3 .github/scripts/check-coverage.py coverage.cobertura.xml
+dotnet test --project Spellbook.Tests/Spellbook.Tests.csproj -c Release --results-directory coverage --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --coverage-settings coverage.runsettings --report-trx --report-trx-filename tests.trx
+dotnet run --project .github/scripts/CoverageChecker/CoverageChecker.csproj -c Release -- coverage/coverage.cobertura.xml
 ```
 
 Use a fresh `coverage` directory for each run. Coverage measures the application assembly, including UI code; test code and generated build files are excluded. Two bUnit component tests exercise the rendered deck editor: deck/card editing and restoration/import/export/media selection. The tests use a fake browser storage boundary. They do not measure JavaScript or replace browser testing.
