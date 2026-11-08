@@ -17,14 +17,14 @@ Use this skill when validating Spellbook through realistic, varied browser sessi
    SPELLBOOK_STATIC_ROOT=publish/wwwroot node tests/browser/serve-static.mjs
    ```
 
-2. In another terminal, install the pinned Playwright runner dependency if needed, then run ten seeded sessions:
+2. In another terminal, install the pinned Playwright runner dependency if needed, then run 100 seeded sessions for a full validation pass:
 
    ```sh
    npm install --prefix tests/browser --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
-   RUT_ITERATIONS=10 RUT_SEED=20261108 node --test tests/browser/randomized-usage.test.mjs
+   RUT_ITERATIONS=100 RUT_SEED=20261108 node --test tests/browser/randomized-usage.test.mjs
    ```
 
-3. Change `RUT_ITERATIONS` to set N. Change `RUT_SEED` to reproduce the same sequence. Every test reports its seed; failures also report the current step, URL, browser errors, and save a screenshot in `test-results/randomized-usage/`.
+3. Change `RUT_ITERATIONS` to set N (10 is a quick smoke run). Change `RUT_SEED` to reproduce the same sequence. Every test reports its seed; failures also report the current step, URL, browser errors, and save a screenshot in `test-results/randomized-usage/`.
 
 ## Triage
 
