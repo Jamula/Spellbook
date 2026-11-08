@@ -8,13 +8,16 @@
   --muted: #526456;
   --border: #7a907b;
   --focus: #245a9b;
+  --theme-secondary: #365e43;
+  --theme-secondary-soft: #e8f0e5;
+  --theme-card: linear-gradient(135deg, #f6f0de, #fff 55%, #e8f0e5);
 }
 
 * { box-sizing: border-box; }
 body { margin: 0; }
-a { color: #365e43; }
+a { color: var(--theme-secondary); }
 header {
-  background: #e8f0e5;
+  background: var(--theme-secondary-soft);
   border-bottom: 1px solid var(--border);
   padding: 18px max(18px, calc((100vw - 1100px) / 2));
   display: flex;
@@ -67,7 +70,7 @@ button, .upload {
   cursor: pointer;
 }
 button:hover, .upload:hover { background: var(--sage-hover); }
-.secondary { background: #e8f0e5; color: #22352a; border-color: var(--border); }
+.secondary { background: var(--theme-secondary-soft); color: #22352a; border-color: var(--border); }
 .secondary:hover { background: #d8e5d3; }
 .danger { background: #943d38; }
 .danger:hover { background: #78302c; }
@@ -108,7 +111,7 @@ details li { overflow-wrap: anywhere; }
 textarea { width: 100%; min-height: 150px; resize: vertical; }
 .feedback-section { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; }
 .feedback-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; font-weight: 650; border: 1px solid var(--sage); border-radius: 8px; background: #fff; }
-.feedback-link:hover { background: #e8f0e5; }
+.feedback-link:hover { background: var(--theme-secondary-soft); }
 .feedback-notice { max-width: 50ch; margin: 0; font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; }
 footer { text-align: center; padding: 28px; }
 @media (max-width: 730px) {
@@ -167,11 +170,21 @@ footer { text-align: center; padding: 28px; }
 .deck-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px;margin:1rem 0}
 .deck-tile{border:1px solid var(--border);border-radius:12px;padding:16px;background:#fff}
 .deck-tile h2{margin:0 0 8px;font-size:1.1rem}
-.visual-card{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(135deg,#f6f0de,#fff 55%,#e8f0e5)}
-.visual-card-art{width:48px;height:64px;display:grid;place-items:center;border:2px solid #8b7757;border-radius:7px;background:linear-gradient(145deg,#e8f0e5,#c8d8c4);font-size:1.5rem;color:#35533e}
+.visual-card{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--theme-card)}
+.visual-card-art{width:48px;height:64px;display:grid;place-items:center;border:2px solid var(--theme-secondary);border-radius:7px;background:var(--theme-secondary-soft);font-size:1.5rem;color:var(--theme-secondary)}
 .visual-card-info{display:grid;min-width:0;gap:4px}
 .visual-card-info a{font-weight:700;overflow-wrap:anywhere}
 .visual-card-info small{color:#52635a}
 .visual-card .row-actions{gap:4px}
 @media(max-width:520px){.visual-card{grid-template-columns:40px minmax(0,1fr) auto;gap:8px;padding:8px}.visual-card-art{width:40px;height:56px}.visual-card .row-actions button{min-width:32px;min-height:40px}}
 .feedback-turnstile{min-height:20px}
+
+.theme-picker { margin: 28px 0; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+.theme-picker h2 { margin-bottom: 8px; }
+.theme-picker fieldset { margin: 18px 0 8px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.theme-picker legend { padding: 0 6px; font-weight: 650; }
+.theme-options { display: flex; flex-wrap: wrap; gap: 12px; }
+.theme-option { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.theme-option input { width: 20px; height: 20px; min-height: 20px; accent-color: var(--sage); }
+.theme-swatch { width: 24px; height: 24px; border: 2px solid #3a3a3a; border-radius: 50%; background: var(--swatch); }
+.theme-picker button.secondary { border-color: var(--sage); color: var(--sage); }
