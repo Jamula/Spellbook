@@ -121,16 +121,16 @@ jobs:
       - name: Test with Cobertura coverage
         id: tests
         run: >-
-          dotnet test Spellbook.Tests/Spellbook.Tests.csproj --configuration Release --no-restore
-          --collect:"XPlat Code Coverage" --settings coverage.runsettings
-          --results-directory coverage --logger "trx;LogFileName=tests.trx"
-          --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
+          dotnet test --project Spellbook.Tests/Spellbook.Tests.csproj --configuration Release --no-restore
+          --results-directory coverage --coverage --coverage-output-format cobertura
+          --coverage-output coverage.cobertura.xml --coverage-settings coverage.runsettings
+          --report-trx --report-trx-filename tests.trx
       - name: Summarize test results and verify tests executed
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: python3 .github/scripts/check-test-results.py coverage/tests.trx
       - name: Check application coverage is at least 97%
         run: |
-          cp coverage/*/coverage.cobertura.xml coverage.cobertura.xml
+          cp coverage/coverage.cobertura.xml coverage.cobertura.xml
           python3 .github/scripts/check-coverage.py coverage.cobertura.xml
       - name: Save test and coverage diagnostics
         if: ${{ !cancelled() && hashFiles('coverage/**/*.trx', 'coverage/**/coverage.cobertura.xml', 'coverage.cobertura.xml') != '' }}

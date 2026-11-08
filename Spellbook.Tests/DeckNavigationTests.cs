@@ -4,6 +4,7 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using Spellbook.Models;
 using Spellbook.Pages;
 using Spellbook.Services;
@@ -42,6 +43,66 @@ public sealed class DeckNavigationTests
         TestChecks.Contains("Deck name saved", page.Markup);
         page.Find("button.danger").Click();
         TestChecks.Contains("No decks yet", page.Markup);
+    }
+
+    [TestMethod]
+    public void DeckCollectionCanOpenAnExistingDeckAndRollBackFailedEdits()
+    {
+        var deck = new Deck { Name = "Alpha" };
+        using var context = new BunitContext();
+        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true)
+            .SetResult(JsonSerializer.Serialize(new[] { deck }));
+        context.JSInterop.SetupVoid("spellbookStorage.set", _ => true)
+            .SetException(new JSException("Quota exceeded"));
+        context.Services.AddScoped<DeckStore>();
+        var page = context.Render<Decks>();
+        page.WaitForAssertion(() => TestChecks.Contains("Alpha", page.Markup));
+
+        page.Find(".deck-tile button:not(.danger)").Click();
+        TestChecks.Contains(deck.Id.ToString(), context.Services.GetRequiredService<NavigationManager>().Uri);
+
+        var secondContext = new BunitContext();
+        using (secondContext)
+        {
+            secondContext.JSInterop.Setup<string?>("spellbookStorage.get", _ => true)
+                .SetResult(JsonSerializer.Serialize(new[] { deck }));
+            secondContext.JSInterop.SetupVoid("spellbookStorage.set", _ => true)
+                .SetException(new JSException("Quota exceeded"));
+            secondContext.Services.AddScoped<DeckStore>();
+            var pageWithFailedWrites = secondContext.Render<Decks>();
+            pageWithFailedWrites.WaitForAssertion(() => TestChecks.Contains("Alpha", pageWithFailedWrites.Markup));
+            pageWithFailedWrites.Find("input[aria-label='Deck name for Alpha']").Change("Beta");
+            TestChecks.Contains("Could not rename this deck", pageWithFailedWrites.Markup);
+            TestChecks.AreEqual("Alpha", pageWithFailedWrites.Find("input[aria-label='Deck name for Alpha']").GetAttribute("value"));
+            pageWithFailedWrites.Find("button.danger").Click();
+            TestChecks.Contains("Could not delete this deck", pageWithFailedWrites.Markup);
+            TestChecks.Single(pageWithFailedWrites.FindAll(".deck-tile"));
+        }
+    }
+
+    [TestMethod]
+    public void DeckCollectionRecoversDamagedDataOnlyAfterConfirmingAndValidatingBackup()
+    {
+        using var context = new BunitContext();
+        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true).SetResult("not json");
+        context.JSInterop.SetupVoid("spellbookStorage.set", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("spellbookStorage.download", _ => true).SetVoidResult();
+        context.Services.AddScoped<DeckStore>();
+        var page = context.Render<Decks>();
+        page.WaitForAssertion(() => TestChecks.Contains("Saved decks could not be loaded.", page.Markup));
+
+        page.Find("button").Click();
+        TestChecks.AreEqual("spellbook-recovery-raw.json", context.JSInterop.Invocations["spellbookStorage.download"].Last().Arguments[0]);
+        var restore = page.FindComponents<InputFile>().Single();
+        TestChecks.IsTrue(restore.Find("input").HasAttribute("disabled"));
+        page.Find("input[type=checkbox]").Change(true);
+        restore.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
+        TestChecks.Contains("Recovery failed", page.Markup);
+        TestChecks.Empty(context.JSInterop.Invocations["spellbookStorage.set"]);
+
+        restore.UploadFiles(InputFileContent.CreateFromText("[]", "empty.json"));
+        TestChecks.Contains("Restored 0 deck(s).", page.Markup);
+        TestChecks.Contains("My decks", page.Markup);
     }
 
     [TestMethod]

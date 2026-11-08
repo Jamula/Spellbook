@@ -108,5 +108,14 @@ public sealed class DeckListCodecTests
         TestChecks.Throws<InvalidDataException>(() => DeckListCodec.ExportCsv(custom));
     }
 
+    [TestMethod]
+    public void CsvRejectsSideboardCommandersAndTextPreservesUnrecognizedTrailingBrackets()
+    {
+        TestChecks.Throws<InvalidDataException>(() => DeckListCodec.Parse(
+            "Quantity,Name,Board,Commander\n1,Opt,Sideboard,true", "Conflict"));
+        var parsed = DeckListCodec.Parse("1 Unusual card name]", "Odd bracket");
+        TestChecks.AreEqual("Unusual card name]", TestChecks.Single(parsed.Deck.Cards).Name);
+    }
+
     private static string[] Rows(Deck deck) => deck.Cards.Select(c => $"{c.Section}|{c.Name}|{c.Quantity}").Order().ToArray();
 }

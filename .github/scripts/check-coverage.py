@@ -20,12 +20,11 @@ if percentage < 97:
 # filenames relative to the repository, which also contains the test project.
 root = Path(__file__).resolve().parents[2]
 sources = report.find("sources")
-if sources is None:
-    sys.exit("Coverage report must declare source roots.")
-source_paths = [root / source.text for source in sources if source.text]
+source_paths = [root / source.text for source in sources or [] if source.text]
 for entry in report.findall(".//class"):
     filename = Path(entry.attrib["filename"])
-    candidates = [root / filename, *(source / filename for source in source_paths)]
+    candidates = [filename] if filename.is_absolute() else [root / filename]
+    candidates.extend(source / filename for source in source_paths)
     resolved = next(
         (path.resolve() for path in candidates if path.is_file() and path.resolve().is_relative_to(root)),
         None,
@@ -33,6 +32,8 @@ for entry in report.findall(".//class"):
     if resolved is None:
         sys.exit(f"Coverage source does not exist inside the repository: {filename}")
     entry.set("filename", resolved.relative_to(root).as_posix())
+if sources is None:
+    sources = ET.SubElement(report, "sources")
 sources.clear()
 ET.SubElement(sources, "source").text = "."
 tree.write(sys.argv[1], encoding="utf-8", xml_declaration=True)
