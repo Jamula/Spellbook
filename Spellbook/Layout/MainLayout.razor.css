@@ -70,12 +70,12 @@
   padding-inline: 12px;
 }
 
-.shell-header .navigation-panel nav {
+.navigation-panel ::deep nav {
   display: grid;
   gap: 8px;
 }
 
-.shell-header .navigation-panel nav a {
+.navigation-panel ::deep nav a {
   display: flex;
   align-items: center;
   min-height: 48px;
@@ -88,8 +88,8 @@
   text-decoration: none;
 }
 
-.shell-header .navigation-panel nav a:hover,
-.shell-header .navigation-panel nav a.active {
+.navigation-panel ::deep nav a:hover,
+.navigation-panel ::deep nav a.active {
   background: var(--theme-secondary-soft);
   border-color: var(--theme-secondary);
 }
