@@ -26,7 +26,7 @@ for (let index = 0; index < iterations; index += 1) {
     const context = await browser.newContext();
     const page = await context.newPage();
     const errors = [];
-    let step = 'initialize';
+    let step;
     page.on('pageerror', error => errors.push(error.message));
     await page.route('https://api.scryfall.com/**', route => route.abort());
     try {

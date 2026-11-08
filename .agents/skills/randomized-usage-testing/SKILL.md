@@ -21,8 +21,11 @@ Use this skill when validating Spellbook through realistic, varied browser sessi
 
    ```sh
    npm install --prefix tests/browser --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
+   tests/browser/node_modules/.bin/playwright install chromium
    RUT_ITERATIONS=100 RUT_SEED=20261108 node --test tests/browser/randomized-usage.test.mjs
    ```
+
+   If browser downloads are unavailable, use a preinstalled Chromium with `RUT_CHROMIUM_PATH=/path/to/chromium`.
 
 3. Change `RUT_ITERATIONS` to set N (10 is a quick smoke run). Change `RUT_SEED` to reproduce the same sequence. Every test reports its seed; failures also report the current step, URL, browser errors, and save a screenshot in `test-results/randomized-usage/`.
 
