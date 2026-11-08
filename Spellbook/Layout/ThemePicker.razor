@@ -1,0 +1,92 @@
+@inject IJSRuntime JS
+
+<section class="theme-picker" aria-labelledby="theme-heading">
+    <h2 id="theme-heading">App theme</h2>
+    <p>Choose two Magic colors. Your choice is saved only in this browser.</p>
+    <fieldset>
+        <legend>Choose exactly two colors</legend>
+        <div class="theme-options">
+            @foreach (var color in colors)
+            {
+                var selected = selection.Contains(color.Key);
+                <label class="theme-option">
+                    <input type="checkbox" checked="@selected" disabled="@(!selected && selection.Count == 2)" @onchange="e => Toggle(color.Key, e.Value is true)" />
+                    <span class="theme-swatch" style="--swatch:@color.Value" aria-hidden="true"></span>
+                    <span>@Label(color.Key)</span>
+                </label>
+            }
+        </div>
+    </fieldset>
+    <p class="muted">The first selected color sets the main accent; the second sets supporting accents.</p>
+    <div class="toolbar">
+        <button @onclick="Save" disabled="@(selection.Count != 2)">Apply theme</button>
+        <button class="secondary" @onclick="Reset">Reset to default</button>
+    </div>
+    <p role="status" aria-live="polite">@status</p>
+</section>
+
+@code {
+    private static readonly KeyValuePair<string, string>[] colors =
+    [
+        new("white", "#f0eadb"), new("blue", "#3478bd"), new("black", "#303030"),
+        new("red", "#c33d3d"), new("green", "#438750")
+    ];
+
+    private readonly List<string> selection = [];
+    private string status = "Using the default Spellbook theme.";
+
+    private static string Label(string color) => char.ToUpperInvariant(color[0]) + color[1..];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var saved = await JS.InvokeAsync<string[]?>("spellbookTheme.load");
+            if (saved is { Length: 2 } && saved.All(color => colors.Any(option => option.Key == color)))
+            {
+                selection.AddRange(saved);
+                status = $"Current theme: {Label(saved[0])} and {Label(saved[1])}.";
+            }
+        }
+        catch (JSException)
+        {
+            status = "Theme settings are unavailable in this browser.";
+        }
+    }
+
+    private void Toggle(string color, bool isChecked)
+    {
+        if (isChecked && selection.Count < 2 && !selection.Contains(color)) selection.Add(color);
+        else if (!isChecked) selection.Remove(color);
+    }
+
+    private async Task Save()
+    {
+        if (selection.Count != 2) return;
+        try
+        {
+            var saved = await JS.InvokeAsync<bool>("spellbookTheme.save", new object?[] { selection.ToArray() });
+            status = saved ? $"Theme applied: {Label(selection[0])} and {Label(selection[1])}." : "Could not save the theme in this browser.";
+        }
+        catch (JSException)
+        {
+            status = "Could not apply the theme in this browser.";
+        }
+    }
+
+    private async Task Reset()
+    {
+        selection.Clear();
+        try
+        {
+            var reset = await JS.InvokeAsync<bool>("spellbookTheme.reset");
+            status = reset
+                ? "Using the default Spellbook theme."
+                : "Using the default theme. Browser storage could not be cleared.";
+        }
+        catch (JSException)
+        {
+            status = "Using the default theme. Browser storage could not be cleared.";
+        }
+    }
+}
