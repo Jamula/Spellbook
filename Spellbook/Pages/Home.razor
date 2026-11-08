@@ -39,7 +39,7 @@ else if (selected is not null)
                 <div class="card-rows">
                 @foreach (var card in selected.Cards.OrderBy(c => c.Name).ToList())
                 {
-                    <article class="card-row visual-card"><div class="visual-card-art" aria-hidden="true">✦</div><div class="visual-card-info"><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @CardLabel(card) on Scryfall">@card.Name</a><small>@card.Section</small></div><div class="row-actions"><button aria-label="Decrease quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong aria-label="Quantity">@card.Quantity</strong><button aria-label="Increase quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @CardLabel(card)" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></article>
+                    <article class="card-row visual-card"><div class="visual-card-art" aria-hidden="true">✦</div><div class="visual-card-info"><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @CardLabel(card) on Scryfall">@card.Name</a><label class="muted">Card title<input aria-label="Card title for @CardLabel(card)" maxlength="200" value="@card.Name" @onchange="e => RenameCard(card, e.Value?.ToString())" /></label><small>@card.Section</small></div><div class="row-actions"><button aria-label="Decrease quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong aria-label="Quantity">@card.Quantity</strong><button aria-label="Increase quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @CardLabel(card)" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></article>
                 }
                 </div>
                 <Spellbook.Components.DeckStatistics Deck="selected" OnChanged="Persist" />
@@ -246,6 +246,19 @@ else if (loaded)
         await Persist();
     }
     private async Task RemoveCard(DeckCard card) { selected?.Cards.Remove(card); await Persist(); }
+    private async Task RenameCard(DeckCard card, string? proposedName)
+    {
+        var name = proposedName?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 200)
+        {
+            message = "Enter a card title with 1–200 characters.";
+            return;
+        }
+
+        card.Name = name;
+        await Persist();
+        message = "Card title saved.";
+    }
     private async Task Persist()
     {
         if (loadFailed) return;

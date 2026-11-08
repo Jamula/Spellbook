@@ -16,7 +16,7 @@ else if (loadFailed)
 else
 {
     <div class="toolbar">
-        <label>New deck name <input maxlength="160" @bind="newName" /></label>
+        <label>New deck name <input aria-label="New deck name" maxlength="160" @bind="newName" /></label>
         <button @onclick="CreateDeck">Create deck</button>
     </div>
     @if (decks.Count == 0) { <p>No decks yet. Create your first one above.</p> }
