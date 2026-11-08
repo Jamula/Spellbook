@@ -52,9 +52,10 @@
       return apply(pair);
     },
     reset() {
-      try { localStorage.removeItem(key); } catch { /* The default theme still applies. */ }
+      let removed = true;
+      try { localStorage.removeItem(key); } catch { removed = false; }
       apply(null);
-      return true;
+      return removed;
     }
   };
 })();

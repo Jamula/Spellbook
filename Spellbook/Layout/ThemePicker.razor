@@ -79,8 +79,10 @@
         selection.Clear();
         try
         {
-            await JS.InvokeVoidAsync("spellbookTheme.reset");
-            status = "Using the default Spellbook theme.";
+            var reset = await JS.InvokeAsync<bool>("spellbookTheme.reset");
+            status = reset
+                ? "Using the default Spellbook theme."
+                : "Using the default theme. Browser storage could not be cleared.";
         }
         catch (JSException)
         {

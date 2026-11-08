@@ -35,7 +35,7 @@ public sealed class ThemePickerTests
     {
         using var context = new BunitContext();
         context.JSInterop.Setup<string[]?>("spellbookTheme.load", _ => true).SetResult(["blue", "red"]);
-        context.JSInterop.SetupVoid("spellbookTheme.reset", _ => true).SetVoidResult();
+        context.JSInterop.Setup<bool>("spellbookTheme.reset", _ => true).SetResult(true);
         var page = context.Render<ThemePicker>();
 
         TestChecks.IsTrue(page.FindAll(".theme-option input")[1].HasAttribute("checked"));
@@ -110,8 +110,22 @@ public sealed class ThemePickerTests
     {
         using var context = new BunitContext();
         context.JSInterop.Setup<string[]?>("spellbookTheme.load", _ => true).SetResult(["blue", "red"]);
-        context.JSInterop.SetupVoid("spellbookTheme.reset", _ => true)
-            .SetException(new Microsoft.JSInterop.JSException("Storage unavailable"));
+        context.JSInterop.Setup<bool>("spellbookTheme.reset", _ => true).SetResult(false);
+        var page = context.Render<ThemePicker>();
+
+        page.Find("button.secondary").Click();
+
+        TestChecks.Contains("Using the default theme. Browser storage could not be cleared", page.Markup);
+        TestChecks.IsFalse(page.FindAll(".theme-option input").Any(input => input.HasAttribute("checked")));
+    }
+
+    [TestMethod]
+    public void ResetInteropExceptionIsReported()
+    {
+        using var context = new BunitContext();
+        context.JSInterop.Setup<string[]?>("spellbookTheme.load", _ => true).SetResult(["blue", "red"]);
+        context.JSInterop.Setup<bool>("spellbookTheme.reset", _ => true)
+            .SetException(new Microsoft.JSInterop.JSException("Theme interop unavailable"));
         var page = context.Render<ThemePicker>();
 
         page.Find("button.secondary").Click();
