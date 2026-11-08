@@ -1,0 +1,5 @@
+1x Niv-Mizzet, Parun (grn) 192 [Commander]
+4x Lightning Bolt (m11) 146 [Mainboard]
+2x Island (m21) 265 [Mainboard]
+2x Negate (m20) 69 [Sideboard]
+1x Opt (eld) 59 [Maybeboard]

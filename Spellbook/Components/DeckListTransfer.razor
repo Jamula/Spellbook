@@ -1,0 +1,85 @@
+@using Spellbook.Services
+@using Spellbook.Models
+@using Microsoft.JSInterop
+@inject Microsoft.JSInterop.IJSRuntime JS
+<details>
+    <summary>Import/export a Moxfield or Archidekt deck list</summary>
+    <p>Paste a plain-text or CSV export, or choose a file. Everything stays in this browser. Import creates a new deck; JSON backup remains the full collection backup.</p>
+    <p>Card names are checked for valid text only, not against a card database. Review names and zones before saving. Printing details and custom categories are not preserved.</p>
+    <label>Imported deck name<input aria-label="Imported deck name" maxlength="160" @bind="deckName" @bind:after="ClearPreview" /></label>
+    <label>Deck list<textarea aria-label="Deck list" rows="8" @bind="text" @bind:after="ClearPreview"></textarea></label>
+    <label class="upload">Choose deck list file <InputFile OnChange="ReadFile" accept=".txt,.csv,text/plain,text/csv" /></label>
+    <button @onclick="Preview">Review deck list</button>
+    @if (!string.IsNullOrEmpty(message)) { <p role="status" class="note">@message</p> }
+    @if (preview is not null)
+    {
+        <h3>Review: @preview.Deck.Name · @preview.Deck.CardCount cards</h3>
+        @foreach (var warning in preview.Warnings) { <p class="note">@warning</p> }
+        <ul aria-label="Deck list preview">
+            @foreach (var card in preview.Deck.Cards) { <li>@card.Quantity × @card.Name · @card.Section</li> }
+        </ul>
+        <label><input type="checkbox" @bind="confirmed" /> I reviewed the card names, quantities, and zones.</label>
+        <button disabled="@(!confirmed)" @onclick="ConfirmImport">Import reviewed deck</button>
+    }
+    @if (CurrentDeck is not null)
+    {
+        <p>Export the selected deck as a common text/CSV list for manual import in Moxfield or Archidekt. Check the destination's selected import format.</p>
+        <div class="toolbar">
+            <button class="secondary" @onclick="() => Export(false)">Export deck TXT</button>
+            <button class="secondary" @onclick="() => Export(true)">Export deck CSV</button>
+        </div>
+    }
+</details>
+@code {
+    [Parameter] public Deck? CurrentDeck { get; set; }
+    [Parameter] public EventCallback<Deck> OnImport { get; set; }
+    private string deckName = "Imported deck";
+    private string text = "";
+    private string message = "";
+    private bool confirmed;
+    private DeckListImport? preview;
+    private void ClearPreview() { preview = null; confirmed = false; message = ""; }
+    private void Preview()
+    {
+        ClearPreview();
+        try { preview = DeckListCodec.Parse(text, deckName); }
+        catch (InvalidDataException ex) { message = ex.Message; }
+    }
+    private async Task ReadFile(InputFileChangeEventArgs args)
+    {
+        ClearPreview();
+        try
+        {
+            var file = args.File;
+            if (file.Size > 2_000_000) throw new InvalidDataException("Deck list must be smaller than 2 MB.");
+            using var stream = file.OpenReadStream(2_000_000);
+            using var reader = new StreamReader(stream);
+            text = await reader.ReadToEndAsync();
+            Preview();
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException) { message = ex.Message; }
+    }
+    private async Task ConfirmImport()
+    {
+        if (!confirmed || preview is null) return;
+        try { await OnImport.InvokeAsync(preview.Deck); }
+        catch (JSException)
+        {
+            message = "Could not save the imported deck. Your review is still available; free browser storage and retry.";
+            return;
+        }
+        preview = null; confirmed = false; text = "";
+        message = "Deck list imported as a new deck.";
+    }
+    private async Task Export(bool csv)
+    {
+        if (CurrentDeck is null) return;
+        try
+        {
+            var content = csv ? DeckListCodec.ExportCsv(CurrentDeck) : DeckListCodec.ExportText(CurrentDeck);
+            await JS.InvokeVoidAsync("spellbookStorage.download", csv ? "spellbook-deck.csv" : "spellbook-deck.txt", content, csv ? "text/csv;charset=utf-8" : "text/plain;charset=utf-8");
+            message = "Deck list exported. Keep a JSON backup to preserve the complete collection.";
+        }
+        catch (InvalidDataException ex) { message = ex.Message; }
+    }
+}

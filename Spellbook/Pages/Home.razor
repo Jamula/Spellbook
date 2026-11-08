@@ -51,11 +51,11 @@ else
                 }
                 @if (!string.IsNullOrEmpty(searchMessage)) { <p class="muted" role="status">@searchMessage</p> }
                 <p class="muted">Suggestions powered by <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer">Scryfall</a>. Typing sends only your search text to Scryfall. Manual entry works offline.</p>
-                <h3>Main deck · @selected.CardCount cards</h3>
+                <h3>Deck · @selected.CardCount cards (all zones)</h3>
                 <div class="card-rows">
                 @foreach (var card in selected.Cards.OrderBy(c => c.Name).ToList())
                 {
-                    <div class="card-row"><span><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @card.Name on Scryfall">@card.Name</a></span><div class="row-actions"><button aria-label="Decrease quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @card.Name" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
+                    <div class="card-row"><span><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @CardLabel(card) on Scryfall">@card.Name</a> <small>@card.Section</small></span><div class="row-actions"><button aria-label="Decrease quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @CardLabel(card)" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
                 }
                 </div>
                 <Spellbook.Components.DeckStatistics Deck="selected" OnChanged="Persist" />
@@ -112,6 +112,7 @@ else
             </section>
         }
     </div>
+    <Spellbook.Components.DeckListTransfer CurrentDeck="selected" OnImport="ImportDeckList" />
 }
 @code {
     private static string ScryfallCardSearchUrl(string name) =>
@@ -256,7 +257,7 @@ else
     private async Task AddCard()
     {
         if (selected is null || string.IsNullOrWhiteSpace(cardName) || quantity < 1 || quantity > 250) return;
-        var existing = selected.Cards.FirstOrDefault(c => string.Equals(c.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase));
+        var existing = selected.Cards.FirstOrDefault(c => string.Equals(c.Section.Trim(), "Main", StringComparison.OrdinalIgnoreCase) && string.Equals(c.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase));
         if (existing is not null) existing.Quantity = Math.Min(250, existing.Quantity + quantity);
         else selected.Cards.Add(new DeckCard { Name = cardName.Trim(), Quantity = quantity });
         cardName = ""; quantity = 1; suggestions.Clear(); searchGeneration++; await Persist();
@@ -287,6 +288,14 @@ else
         }
         await Store.SaveAsync(decks);
         lastSavedName = selected?.Name ?? "";
+    }
+    private static string CardLabel(DeckCard card) => card.Section == "Main" ? card.Name : $"{card.Name} ({card.Section})";
+    private async Task ImportDeckList(Deck deck)
+    {
+        var importedDecks = decks.Append(deck).ToList();
+        await Store.SaveAsync(importedDecks);
+        ClearScan();
+        decks = importedDecks; selected = deck; lastSavedName = deck.Name;
     }
     private Task ExportDamaged() => Store.ExportDamagedAsync();
     private async Task RecoverImport(InputFileChangeEventArgs e)

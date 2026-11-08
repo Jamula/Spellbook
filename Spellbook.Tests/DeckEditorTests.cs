@@ -3,6 +3,7 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using Spellbook.Layout;
 using Spellbook.Models;
 using Spellbook.Pages;
@@ -83,7 +84,7 @@ public sealed class DeckEditorTests
         using var context = CreateContext(JsonSerializer.Serialize(new[] { existing }));
         var page = context.Render<Home>();
         page.WaitForAssertion(() => Assert.Equal("Existing", page.Find("h2").TextContent));
-        Assert.Contains("Main deck · 3 cards", page.Markup);
+        Assert.Contains("Deck · 3 cards", page.Markup);
 
         var importer = page.FindComponents<InputFile>()[0];
         importer.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
@@ -126,6 +127,33 @@ public sealed class DeckEditorTests
         Assert.All(context.JSInterop.Invocations,
             call => Assert.Contains(call.Identifier, new[] { "spellbookStorage.get", "spellbookStorage.set",
                 "spellbookStorage.download", "Blazor._internal.InputFile.init" }));
+    }
+
+    [Fact]
+    public void FailedDeckListSaveDoesNotChangeTheLiveCollection()
+    {
+        var existing = new Deck { Name = "Existing" };
+        using var context = CreateContext(JsonSerializer.Serialize(new[] { existing }));
+        context.JSInterop.SetupVoid("spellbookStorage.set", _ => true)
+            .SetException(new JSException("Quota exceeded"));
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.Equal("Existing", page.Find("h2").TextContent));
+        var transfer = page.FindComponent<Spellbook.Components.DeckListTransfer>();
+        transfer.Find("textarea").Change("1 Island");
+        transfer.FindAll("button").Single(button => button.TextContent == "Review deck list").Click();
+        transfer.Find("input[type=checkbox]").Change(true);
+
+        transfer.FindAll("button").Single(button => button.TextContent == "Import reviewed deck").Click();
+
+        Assert.Contains("Could not save the imported deck", transfer.Markup);
+        Assert.Contains("Review: Imported deck", transfer.Markup);
+        Assert.False(transfer.FindAll("button").Single(button => button.TextContent == "Import reviewed deck").HasAttribute("disabled"));
+        Assert.Equal("Existing", page.Find("h2").TextContent);
+        Assert.Single(page.FindAll(".deck-choice"));
+        var attemptedSave = JsonSerializer.Deserialize<List<Deck>>(
+            Assert.IsType<string>(Assert.Single(context.JSInterop.Invocations["spellbookStorage.set"]).Arguments[1]),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal(["Existing", "Imported deck"], attemptedSave.Select(deck => deck.Name));
     }
 
     [Fact]
