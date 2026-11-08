@@ -105,7 +105,9 @@ public sealed class DeckEditorTests
 
         Button(page, "Download raw saved data").Click();
         var rawDownload = TestChecks.Single(context.JSInterop.Invocations["spellbookStorage.download"]);
-        TestChecks.AreEqual("spellbook-recovery-raw.json", rawDownload.Arguments[0]);
+        TestChecks.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(
+            TestChecks.IsType<string>(rawDownload.Arguments[0]),
+            @"^\d{4}-\d{2}-\d{2}-local-decks-[A-Za-z0-9._-]+\.json$"));
         TestChecks.AreEqual("not json", rawDownload.Arguments[1]);
 
         var restore = page.FindComponents<InputFile>().Single();

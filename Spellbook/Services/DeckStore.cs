@@ -27,14 +27,20 @@ public sealed class DeckStore(IJSRuntime js)
     {
         var raw = await js.InvokeAsync<string?>("spellbookStorage.get", Key);
         if (!string.IsNullOrWhiteSpace(raw))
-            await js.InvokeVoidAsync("spellbookStorage.download", "spellbook-recovery-raw.json", raw);
+            await js.InvokeVoidAsync(
+                "spellbookStorage.download",
+                DeckBackupFileName.Create(null, DeckBackupFileName.CurrentAppVersion(), DateTime.Now),
+                raw);
     }
 
     public Task SaveAsync(List<Deck> decks) =>
         js.InvokeVoidAsync("spellbookStorage.set", Key, JsonSerializer.Serialize(decks, Options)).AsTask();
 
     public Task ExportAsync(List<Deck> decks) =>
-        js.InvokeVoidAsync("spellbookStorage.download", "spellbook-decks.json", JsonSerializer.Serialize(decks, Options)).AsTask();
+        js.InvokeVoidAsync(
+            "spellbookStorage.download",
+            DeckBackupFileName.Create(null, DeckBackupFileName.CurrentAppVersion(), DateTime.Now),
+            JsonSerializer.Serialize(decks, Options)).AsTask();
 
     public List<Deck> ParseImport(string json)
     {

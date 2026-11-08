@@ -84,10 +84,26 @@ public sealed class DeckStoreTests
         await store.ExportAsync([deck]);
 
         TestChecks.AreEqual("spellbookStorage.download", js.LastCall);
-        TestChecks.AreEqual("spellbook-decks.json", js.LastArguments[0]);
+        TestChecks.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(
+            TestChecks.IsType<string>(js.LastArguments[0]),
+            @"^\d{4}-\d{2}-\d{2}-local-decks-[A-Za-z0-9._-]+\.json$"));
         var imported = TestChecks.Single(store.ParseImport(TestChecks.IsType<string>(js.LastArguments[1])));
         TestChecks.AreEqual(deck.Id, imported.Id);
         TestChecks.AreEqual(deck.Name, imported.Name);
+    }
+
+    [TestMethod]
+    public void BackupFileNameUsesLocalDateSanitizedIdentityAndAppVersion()
+    {
+        var localDate = new DateTime(2026, 2, 3, 23, 59, 0, DateTimeKind.Local);
+        TestChecks.AreEqual("2026-02-03-local-decks-1.2.3.json",
+            DeckBackupFileName.Create(null, "1.2.3+build.45", localDate));
+        TestChecks.AreEqual("2026-02-03-Alice_7-unsafe-decks-1.2.3.json",
+            DeckBackupFileName.Create(" Alice_7/unsafe ", "1.2.3", localDate));
+
+        var currentVersion = DeckBackupFileName.CurrentAppVersion();
+        TestChecks.IsFalse(string.IsNullOrWhiteSpace(currentVersion));
+        TestChecks.IsFalse(currentVersion.Contains('+'));
     }
 
     [TestMethod]
@@ -261,7 +277,9 @@ public sealed class DeckStoreTests
         runtime.StoredJson = "corrupted backup";
         await store.ExportDamagedAsync();
         TestChecks.AreEqual("spellbookStorage.download", runtime.LastCall);
-        TestChecks.AreEqual("spellbook-recovery-raw.json", runtime.LastArguments[0]);
+        TestChecks.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(
+            TestChecks.IsType<string>(runtime.LastArguments[0]),
+            @"^\d{4}-\d{2}-\d{2}-local-decks-[A-Za-z0-9._-]+\.json$"));
         TestChecks.AreEqual("corrupted backup", runtime.LastArguments[1]);
     }
 

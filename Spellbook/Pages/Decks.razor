@@ -9,10 +9,8 @@ else if (loadFailed)
 {
     <p role="alert"><strong>Saved decks could not be loaded.</strong> @error No edits were saved.</p>
     @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
-    <p>Download the raw data first. Restoring a backup replaces unreadable browser data.</p>
-    <button @onclick="ExportDamaged">Download raw saved data</button>
-    <label><input type="checkbox" @bind="confirmRecovery" /> I understand the restore will replace unreadable saved data.</label>
-    <label class="upload">Restore JSON backup <InputFile OnChange="Recover" accept=".json,application/json" disabled="@(!confirmRecovery)" /></label>
+    <p>Use Settings to download the raw data and restore a valid JSON backup.</p>
+    <a href="/settings">Open Settings</a>
 }
 else
 {
@@ -32,8 +30,6 @@ else
             </article>
         }
     </section>
-    <p role="note"><strong>Back up your decks:</strong> Browser storage does not sync between devices. Export JSON regularly and store it somewhere safe.</p>
-    <div class="toolbar"><button class="secondary" @onclick="Export">Export JSON</button><label class="upload">Import JSON <InputFile OnChange="Import" accept=".json,application/json" /></label></div>
     <Spellbook.Components.DeckListTransfer OnImport="ImportDeckList" />
     @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
 }
@@ -45,7 +41,6 @@ else
     private string? error;
     private bool loaded;
     private bool loadFailed;
-    private bool confirmRecovery;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -77,40 +72,6 @@ else
         decks.Remove(deck);
         try { await Store.SaveAsync(decks); }
         catch (JSException ex) { decks.Add(deck); message = $"Could not delete this deck: {ex.Message}"; }
-    }
-    private Task Export() => Store.ExportAsync(decks);
-    private Task ExportDamaged() => Store.ExportDamagedAsync();
-    private async Task Recover(InputFileChangeEventArgs e)
-    {
-        if (!confirmRecovery || !loadFailed) return;
-        try
-        {
-            if (e.File.Size > 2_000_000) throw new InvalidDataException("Backup must be smaller than 2 MB.");
-            using var stream = e.File.OpenReadStream(2_000_000);
-            using var reader = new StreamReader(stream);
-            var recovered = Store.ParseImport(await reader.ReadToEndAsync());
-            await Store.SaveAsync(recovered);
-            decks = recovered; loadFailed = false; confirmRecovery = false; error = null;
-            message = $"Restored {recovered.Count} deck(s).";
-        }
-        catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or JSException) { message = $"Recovery failed: {ex.Message}"; }
-    }
-    private async Task Import(InputFileChangeEventArgs e)
-    {
-        try
-        {
-            var file = e.File;
-            if (file.Size > 2_000_000) throw new InvalidDataException("Import must be smaller than 2 MB.");
-            using var stream = file.OpenReadStream(2_000_000);
-            using var reader = new StreamReader(stream);
-            var imported = Store.ParseImport(await reader.ReadToEndAsync());
-            foreach (var d in imported) d.Id = Guid.NewGuid();
-            var candidate = decks.Concat(imported).ToList();
-            await Store.SaveAsync(candidate);
-            decks = candidate;
-            message = $"Imported {imported.Count} deck(s).";
-        }
-        catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or JSException) { message = $"Import failed: {ex.Message}"; }
     }
     private async Task ImportDeckList(Deck deck)
     {
