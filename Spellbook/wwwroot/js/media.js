@@ -122,20 +122,59 @@ window.spellbookMedia = (() => {
   let activeScanId;
   let cancelScan = false;
   function seek(video, time) {
-    if (Math.abs(video.currentTime - time) < 0.04 && video.readyState >= 2) return Promise.resolve();
+    if (Math.abs(video.currentTime - time) < 0.04 && video.readyState >= 2 && !video.seeking) return Promise.resolve();
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => finish(new Error("Video frame timed out")), 10000);
+      const timeout = setTimeout(() => finish(new Error("Video frame timed out")), 15000);
       const finish = error => {
         clearTimeout(timeout);
         video.removeEventListener("seeked", done);
+        video.removeEventListener("loadeddata", done);
+        video.removeEventListener("canplay", done);
         video.removeEventListener("error", failed);
+        video.removeEventListener("abort", failed);
         error ? reject(error) : resolve();
       };
-      const done = () => finish();
+      const done = () => {
+        if (video.readyState >= 2 && !video.seeking) finish();
+      };
       const failed = () => finish(new Error("Video frame could not be decoded"));
-      video.addEventListener("seeked", done, { once: true });
-      video.addEventListener("error", failed, { once: true });
-      video.currentTime = time;
+      video.addEventListener("seeked", done);
+      video.addEventListener("loadeddata", done);
+      video.addEventListener("canplay", done);
+      video.addEventListener("error", failed);
+      video.addEventListener("abort", failed);
+      try {
+        if (Math.abs(video.currentTime - time) >= 0.04) video.currentTime = time;
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error("Video seek failed"));
+        return;
+      }
+      done();
+    });
+  }
+  function waitForVideoMetadata(video) {
+    const ready = () => video.readyState >= 1 && Number.isFinite(video.duration) && video.duration > 0;
+    if (ready()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => finish(new Error("Video metadata timed out")), 15000);
+      const finish = error => {
+        clearTimeout(timeout);
+        video.removeEventListener("loadedmetadata", check);
+        video.removeEventListener("durationchange", check);
+        video.removeEventListener("error", failed);
+        video.removeEventListener("abort", failed);
+        error ? reject(error) : resolve();
+      };
+      const check = () => {
+        if (video.error) return finish(new Error("Video could not be decoded"));
+        if (ready()) finish();
+      };
+      const failed = () => finish(new Error("Video metadata could not be loaded"));
+      video.addEventListener("loadedmetadata", check);
+      video.addEventListener("durationchange", check);
+      video.addEventListener("error", failed);
+      video.addEventListener("abort", failed);
+      check();
     });
   }
   function estimateStackEdges(dataUrl) {
@@ -189,7 +228,9 @@ window.spellbookMedia = (() => {
   }
   async function scanVideo(videoId, callback, generation) {
     const video = document.getElementById(videoId);
-    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) throw new Error("Video duration is unavailable");
+    if (!video) throw new Error("Selected video preview is unavailable");
+    await waitForVideoMetadata(video);
+    if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error("Video duration is unavailable");
     const interval = Math.max(0.75, video.duration / 100);
     const times = [];
     for (let t = 0; t < video.duration && times.length < 100; t += interval) times.push(t);
