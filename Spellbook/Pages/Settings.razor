@@ -28,6 +28,13 @@
     }
     @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
 </section>
+@if (loaded && !loadFailed)
+{
+    <section aria-labelledby="deck-list-import-heading">
+        <h2 id="deck-list-import-heading">Import</h2>
+        <Spellbook.Components.DeckListTransfer Decks="decks" OnImport="ImportDeckList" />
+    </section>
+}
 <Spellbook.Layout.ThemePicker />
 <Spellbook.Layout.PrivacyControls />
 
@@ -102,6 +109,14 @@
         {
             message = $"Import failed: {ex.Message}";
         }
+    }
+
+    private async Task ImportDeckList(Deck deck)
+    {
+        var candidate = decks.Append(deck).ToList();
+        await Store.SaveAsync(candidate);
+        decks = candidate;
+        message = $"Imported {deck.Name} as a new deck.";
     }
 
     private static async Task<string> ReadBackup(InputFileChangeEventArgs e)

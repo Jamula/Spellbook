@@ -19,12 +19,11 @@ public sealed class DeckListTransferTests
     public void ReviewedImportCreatesNewDeckAndPreservesZonesThroughEditorAndDownloads()
     {
         using var context = new BunitContext();
-        context.Services.AddScoped<DeckStore>();
-        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true).SetResult(JsonSerializer.Serialize(new[] { new Deck { Name = "Existing" } }));
-        context.JSInterop.SetupVoid("spellbookStorage.set", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("spellbookStorage.download", _ => true).SetVoidResult();
-        var page = context.Render<Home>();
-        var transfer = page.FindComponent<DeckListTransfer>();
+        var decks = new List<Deck> { new() { Name = "Existing" } };
+        var transfer = context.Render<DeckListTransfer>(ps => ps
+            .Add(p => p.Decks, decks)
+            .Add(p => p.OnImport, deck => decks.Add(deck)));
         transfer.Find("textarea").Change("4 Lightning Bolt\nSideboard\n1 Lightning Bolt");
         transfer.Find("[aria-label='Imported deck name']").Change("From Moxfield");
         Button(transfer, "Review deck list").Click();
@@ -33,23 +32,19 @@ public sealed class DeckListTransferTests
         TestChecks.Empty(context.JSInterop.Invocations["spellbookStorage.set"]);
         transfer.Find("input[type=checkbox]").Change(true);
         Button(transfer, "Import reviewed deck").Click();
-        var savedJson = TestChecks.IsType<string>(context.JSInterop.Invocations["spellbookStorage.set"].Last().Arguments[1]);
-        var saved = JsonSerializer.Deserialize<List<Deck>>(savedJson, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-        TestChecks.AreEqual(2, saved.Count);
-        TestChecks.AreEqual("From Moxfield", saved[1].Name);
-        TestChecks.AreEqual(5, saved[1].CardCount);
-        TestChecks.Contains(saved[1].Cards, c => c.Section == "Sideboard");
-        page.Find("[aria-label='Increase quantity for Lightning Bolt (Sideboard)']").Click();
-        page.Find("[aria-label='Card name']").Change("Lightning Bolt");
-        page.FindAll("button").Single(b => b.TextContent == "Add").Click();
+        TestChecks.AreEqual(2, decks.Count);
+        TestChecks.AreEqual("From Moxfield", decks[1].Name);
+        TestChecks.AreEqual(5, decks[1].CardCount);
+        TestChecks.Contains(decks[1].Cards, c => c.Section == "Sideboard");
+        transfer.Find("[aria-label='Deck to export']").Change("1");
         Button(transfer, "Export deck TXT").Click();
         Button(transfer, "Export deck CSV").Click();
         var downloads = context.JSInterop.Invocations["spellbookStorage.download"];
         TestChecks.AreEqual("text/plain;charset=utf-8", downloads[0].Arguments[2]);
         TestChecks.AreEqual("text/csv;charset=utf-8", downloads[1].Arguments[2]);
         var roundTrip = DeckListCodec.Parse(TestChecks.IsType<string>(downloads[1].Arguments[1]), "Again");
-        TestChecks.AreEqual(5, roundTrip.Deck.Cards.Single(c => c.Section == "Main").Quantity);
-        TestChecks.AreEqual(2, roundTrip.Deck.Cards.Single(c => c.Section == "Sideboard").Quantity);
+        TestChecks.AreEqual(4, roundTrip.Deck.Cards.Single(c => c.Section == "Main").Quantity);
+        TestChecks.AreEqual(1, roundTrip.Deck.Cards.Single(c => c.Section == "Sideboard").Quantity);
     }
 
     [TestMethod]
@@ -57,7 +52,9 @@ public sealed class DeckListTransferTests
     {
         using var context = new BunitContext();
         var imported = new List<Deck>();
-        var component = context.Render<DeckListTransfer>(ps => ps.Add(p => p.OnImport, deck => imported.Add(deck)));
+        var component = context.Render<DeckListTransfer>(ps => ps
+            .Add(p => p.Decks, [])
+            .Add(p => p.OnImport, deck => imported.Add(deck)));
         Button(component, "Review deck list").Click();
         TestChecks.Contains("Paste a deck list", component.Markup);
         var file = component.FindComponent<InputFile>();
@@ -82,8 +79,9 @@ public sealed class DeckListTransferTests
         using var context = new BunitContext();
         var imported = new List<Deck>();
         var attempts = 0;
-        var component = context.Render<DeckListTransfer>(ps => ps.Add(p => p.OnImport,
-            EventCallback.Factory.Create<Deck>(this, deck =>
+        var component = context.Render<DeckListTransfer>(ps => ps
+            .Add(p => p.Decks, [])
+            .Add(p => p.OnImport, EventCallback.Factory.Create<Deck>(this, deck =>
             {
                 if (attempts++ == 0) throw new JSException("Quota exceeded");
                 imported.Add(deck);

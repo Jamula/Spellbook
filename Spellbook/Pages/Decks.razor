@@ -25,12 +25,13 @@ else
             <article class="deck-tile">
                 <label>Deck name <input aria-label="Deck name for @deck.Name" maxlength="160" value="@deck.Name" @onchange="e => Rename(deck, e)" /></label>
                 <p>@deck.CardCount cards · @deck.Format</p>
-                <button @onclick="() => Edit(deck)">Open deck</button>
-                <button class="danger" @onclick="() => Delete(deck)">Delete</button>
+                <div class="deck-tile-actions" role="group" aria-label="Actions for @deck.Name">
+                    <button class="icon-action" title="Open deck" aria-label="Open deck @deck.Name" @onclick="() => Edit(deck)"><span aria-hidden="true">↗</span></button>
+                    <button class="icon-action danger" title="Delete deck" aria-label="Delete deck @deck.Name" @onclick="() => Delete(deck)"><span aria-hidden="true">×</span></button>
+                </div>
             </article>
         }
     </section>
-    <Spellbook.Components.DeckListTransfer OnImport="ImportDeckList" />
     @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
 }
 
@@ -72,16 +73,5 @@ else
         decks.Remove(deck);
         try { await Store.SaveAsync(decks); }
         catch (JSException ex) { decks.Add(deck); message = $"Could not delete this deck: {ex.Message}"; }
-    }
-    private async Task ImportDeckList(Deck deck)
-    {
-        var candidate = decks.Append(deck).ToList();
-        try
-        {
-            await Store.SaveAsync(candidate);
-            decks = candidate;
-            Navigation.NavigateTo($"/deck/{deck.Id}");
-        }
-        catch (JSException ex) { message = $"Could not save the imported deck: {ex.Message}"; }
     }
 }

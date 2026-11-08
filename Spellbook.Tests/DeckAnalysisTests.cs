@@ -114,5 +114,33 @@ public sealed class DeckAnalysisTests
         TestChecks.Empty(component.FindAll("[aria-label='Card mana value']"));
     }
 
+    [TestMethod]
+    public void ReviewingLocalCardDetailsPreservesManaCostAndImageUrl()
+    {
+        using var context = new BunitContext();
+        var card = new DeckCard
+        {
+            Name = "Mana-rich creature",
+            Details = new CardDetails
+            {
+                ManaValue = 4,
+                ManaCost = "{2}{G}{G}",
+                TypeLine = "Creature",
+                Colors = "G",
+                ImageUrl = "https://cards.scryfall.io/small/front/a/b/card.jpg"
+            }
+        };
+        var deck = new Deck { Cards = [card] };
+        var component = context.Render<DeckStatistics>(p => p.Add(c => c.Deck, deck));
+
+        component.Find("[aria-label='Card to review']").Change("0");
+        component.Find("[aria-label='Card mana value']").Change("5");
+        component.FindAll("button").Single(button => button.TextContent == "Save card details").Click();
+
+        Assert.AreEqual(5, card.Details!.ManaValue);
+        Assert.AreEqual("{2}{G}{G}", card.Details.ManaCost);
+        Assert.AreEqual("https://cards.scryfall.io/small/front/a/b/card.jpg", card.Details.ImageUrl);
+    }
+
     private static void Save(IRenderedComponent<Home> page) => page.FindAll("button").Single(b => b.TextContent == "Save card details").Click();
 }

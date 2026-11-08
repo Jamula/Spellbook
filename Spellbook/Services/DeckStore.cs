@@ -91,9 +91,10 @@ public sealed class DeckStore(IJSRuntime js)
                 {
                     var colors = details.Colors?.Trim().ToUpperInvariant();
                     if (details.ManaValue is double mana && (!double.IsFinite(mana) || mana < 0 || mana > 1000) ||
-                        details.TypeLine?.Length > 500 || details.Colors?.Length > 5 ||
+                        details.TypeLine?.Length > 500 || details.Colors?.Length > 5 || details.ManaCost?.Length > 100 ||
+                        (details.ImageUrl is not null && !IsScryfallImageUrl(details.ImageUrl)) ||
                         (!string.IsNullOrEmpty(colors) && (colors.Any(c => !"WUBRGC".Contains(c)) || (colors.Contains('C') && colors.Length != 1))))
-                        throw new InvalidDataException("Card details contain an invalid mana value, type line, or color code.");
+                        throw new InvalidDataException("Card details contain an invalid mana value, type line, color code, mana cost, or image URL.");
                 }
 
                 // A repeated name in the same section is ambiguous for the quantity editor.
@@ -104,4 +105,9 @@ public sealed class DeckStore(IJSRuntime js)
 
         return data;
     }
+
+    private static bool IsScryfallImageUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        uri.Host.Equals("cards.scryfall.io", StringComparison.OrdinalIgnoreCase);
 }
