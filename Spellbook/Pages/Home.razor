@@ -309,23 +309,6 @@ else if (loaded)
             message = $"Recovery failed; original saved data was not intentionally replaced: {ex.Message}";
         }
     }
-    private Task Export() => Store.ExportAsync(decks);
-    private async Task Import(InputFileChangeEventArgs e)
-    {
-        try
-        {
-            var file = e.File;
-            if (file.Size > 2_000_000) throw new InvalidDataException("Import must be smaller than 2 MB.");
-            using var stream = file.OpenReadStream(2_000_000);
-            using var reader = new StreamReader(stream);
-            var imported = Store.ParseImport(await reader.ReadToEndAsync());
-            foreach (var d in imported) d.Id = Guid.NewGuid();
-            if (imported.Count > 0) ClearScan();
-            decks.AddRange(imported); selected = imported.FirstOrDefault() ?? selected; lastSavedName = selected?.Name ?? "";
-            await Persist(); message = $"Imported {imported.Count} deck(s).";
-        }
-        catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException) { message = $"Import failed: {ex.Message}"; }
-    }
     private async Task MediaSelected(InputFileChangeEventArgs e)
     {
         ClearScan();
