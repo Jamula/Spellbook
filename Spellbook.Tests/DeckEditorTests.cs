@@ -217,17 +217,15 @@ public sealed class DeckEditorTests
         context.JSInterop.SetupVoid("spellbookMedia.releaseVideo", _ => true).SetVoidResult();
 
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => TestChecks.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Video scan");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1, 2], "clip.mov", contentType: "video/quicktime"));
         page.WaitForAssertion(() => TestChecks.AreEqual(1, page.FindAll("#card-video-preview").Count));
 
         Button(page, "Scan video for cards").Click();
         page.WaitForAssertion(() => TestChecks.AreEqual(2, page.FindAll(".video-candidate").Count));
         TestChecks.Contains("Lightning Bolt", page.Markup);
-        TestChecks.Contains("Stack estimate: unavailable", page.Markup);
+        TestChecks.Contains("Stack estimate unavailable · enter quantity manually", page.Markup);
         TestChecks.Empty(SavedDecks(context)[0].Cards);
 
         page.FindAll(".video-candidate input[type=number]")[0].Change("3");

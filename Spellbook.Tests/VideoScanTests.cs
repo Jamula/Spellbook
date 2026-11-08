@@ -41,17 +41,17 @@ public sealed class VideoScanTests
     {
         using var context = new BunitContext();
         context.Services.AddScoped<DeckStore>();
-        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true).SetResult(null);
+        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true)
+            .SetResult(JsonSerializer.Serialize(new[] { new Deck { Name = "Video deck", Cards = [new DeckCard { Name = "Lightning Bolt", Quantity = 2 }] } }));
         context.JSInterop.SetupVoid("spellbookStorage.set", _ => true).SetVoidResult();
         context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("blob:video");
         using var scan = JsonDocument.Parse("""{"frames":[{"time":0,"text":"Lightning Bolt\n{R}","stackCountEstimate":4},{"time":0.75,"text":"Lightning Bolt\n{R}","stackCountEstimate":4},{"time":1.5,"text":"Island\nBasic Land","stackCountEstimate":null}],"cancelled":false}""");
         context.JSInterop.Setup<JsonElement>("spellbookMedia.scanVideo", _ => true).SetResult(scan.RootElement);
 
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.IsTrue(page.Markup.Contains("No decks yet")));
-        page.Find("[aria-label='New deck name']").Change("Video deck");
-        page.FindAll("button").Single(b => b.TextContent == "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(InputFileContent.CreateFromBinary([1], "scan.mp4", contentType: "video/mp4"));
+        page.WaitForAssertion(() => Assert.IsTrue(page.Markup.Contains("Add a card")));
+        page.Instance.OnVideoScanProgress(1, 3).GetAwaiter().GetResult();
+        page.FindComponents<InputFile>()[0].UploadFiles(InputFileContent.CreateFromBinary([1], "scan.mp4", contentType: "video/mp4"));
         page.WaitForAssertion(() => Assert.AreEqual(1, page.FindAll("#card-video-preview").Count));
         var savesBeforeScan = context.JSInterop.Invocations.Count(i => i.Identifier == "spellbookStorage.set");
 
@@ -65,7 +65,7 @@ public sealed class VideoScanTests
         var saved = JsonSerializer.Deserialize<List<Deck>>(
             (string)context.JSInterop.Invocations.Last(i => i.Identifier == "spellbookStorage.set").Arguments[1]!,
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-        Assert.AreEqual(3, saved.Single().Cards.Single(c => c.Name == "Lightning Bolt").Quantity);
+        Assert.AreEqual(5, saved.Single().Cards.Single(c => c.Name == "Lightning Bolt").Quantity);
         Assert.IsTrue(saved.Single().Cards.Any(c => c.Name == "Island"));
     }
 }
