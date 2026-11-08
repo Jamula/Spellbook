@@ -45,15 +45,41 @@ else if (selected is not null)
                 <Spellbook.Components.DeckStatistics Deck="selected" OnChanged="Persist" />
                 <section class="card-scan-panel" aria-label="Scan a card">
                     <h3>Scan a card from a photo or video</h3>
-                    <p>Choose a photo, an iPhone HEIC image, or a video. For a video, scrub to the frame you want and tap Capture frame. Your media stays on this device; OCR runs locally. HEIC conversion and OCR libraries may be downloaded from a CDN on first use; media is not uploaded.</p>
+                    <p>Choose a photo, an iPhone HEIC image, or a video. Scan a video locally to find cards across sampled frames, or scrub and capture one frame. Video OCR and stack-edge estimates run on this device; media is not uploaded. For better estimates, keep visible stack edges in focus; no fixed camera angle is required. Estimates are low-confidence and editable.</p>
                     <InputFile id="card-media-picker" OnChange="MediaSelected" accept="image/*,.heic,.heif,video/*" multiple />
                     @if (!string.IsNullOrEmpty(videoUrl))
                     {
                         <div class="video-frame-review">
                             <video id="card-video-preview" src="@videoUrl" controls playsinline preload="metadata" aria-label="Selected video: scrub to the frame showing the card"></video>
+                            @if (!videoScanActive)
+                            {
+                                <button @onclick="ScanVideo" disabled="@mediaBusy">Scan video for cards</button>
+                            }
+                            else
+                            {
+                                <p role="status">Scanning local frames: @videoScanProgress of @videoScanTotal. @videoScanMessage</p>
+                                <button class="secondary" @onclick="CancelVideoScan">Cancel video scan</button>
+                            }
                             <button @onclick="CaptureVideoFrame" disabled="@mediaBusy">Capture selected video frame</button>
-                            <p class="muted">Pause or scrub to the card's clearest frame, wait for it to load, then capture. You can capture again before confirming the card.</p>
+                            <p class="muted">Automatic scanning samples up to 100 frames across the clip. Longer clips are sampled more sparsely. Check and correct each stack estimate before adding.</p>
+                            @if (!videoScanActive && !string.IsNullOrEmpty(videoScanMessage)) { <p role="status">@videoScanMessage</p> }
                         </div>
+                    }
+                    @if (videoCandidates.Count > 0)
+                    {
+                        <section class="video-scan-review" aria-label="Video card scan review">
+                            <h4>Review cards found in video</h4>
+                            <p>Repeated sightings in nearby frames are combined. Any detected stack quantity is a low-confidence estimate from visible edges; correct it before adding.</p>
+                            @foreach (var candidate in videoCandidates)
+                            {
+                                <div class="video-candidate">
+                                    <label>Card name<input maxlength="200" @bind="candidate.Name" /></label>
+                                    <label>Quantity<input type="number" min="1" max="250" @bind="candidate.Quantity" /></label>
+                                    <small>@candidate.EstimateLabel</small>
+                                </div>
+                            }
+                            <button @onclick="AddVideoCandidates" disabled="@mediaBusy">Add reviewed cards</button>
+                        </section>
                     }
                     @if (mediaNames.Count > 0) { <p role="status">Selected: @string.Join(", ", mediaNames)</p> }
                     @if (!string.IsNullOrEmpty(mediaMessage)) { <p role="status" class="note">@mediaMessage</p> }
@@ -132,6 +158,11 @@ else
     private bool mediaBusy;
     private int scanGeneration;
     private Guid? selectedDeckId;
+    private bool videoScanActive;
+    private int videoScanProgress;
+    private int videoScanTotal;
+    private string videoScanMessage = "";
+    private List<VideoCardCandidate> videoCandidates = [];
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -419,6 +450,66 @@ else
         finally { mediaBusy = false; }
     }
 
+
+    [JSInvokable]
+    public Task OnVideoScanProgress(int generation, int current, int total)
+    {
+        if (generation != scanGeneration) return Task.CompletedTask;
+        videoScanProgress = current; videoScanTotal = total;
+        videoScanMessage = "Sampling frames and recognizing text locally.";
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ScanVideo()
+    {
+        if (string.IsNullOrEmpty(videoUrl) || mediaBusy || videoScanActive) return;
+        var generation = scanGeneration;
+        mediaBusy = true; videoScanActive = true; videoScanProgress = 0; videoScanTotal = 0;
+        videoCandidates.Clear(); videoScanMessage = "Preparing on-device OCR. The first scan downloads OCR assets.";
+        using var callback = DotNetObjectReference.Create(this);
+        try
+        {
+            var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("spellbookMedia.scanVideo", "card-video-preview", callback, generation);
+            if (generation != scanGeneration) return;
+            var frames = result.GetProperty("frames").EnumerateArray().Select(frame => new Spellbook.Services.VideoOcrFrame(
+                frame.GetProperty("time").GetDouble(),
+                frame.GetProperty("text").GetString() ?? "",
+                frame.TryGetProperty("stackCountEstimate", out var estimate) && estimate.ValueKind == System.Text.Json.JsonValueKind.Number && estimate.TryGetInt32(out var count) ? count : null,
+                frame.TryGetProperty("sampleIndex", out var sampleIndex) && sampleIndex.TryGetInt32(out var index) ? index : -1));
+            videoCandidates = Spellbook.Services.VideoCardCandidateBuilder.Build(frames);
+            videoScanMessage = result.GetProperty("cancelled").GetBoolean() ? "Scan cancelled; review the cards found so far." : $"Scan complete. Review {videoCandidates.Count} candidate(s).";
+        }
+        catch (JSException)
+        {
+            videoScanMessage = "Local video scanning failed. You can still capture a frame manually.";
+        }
+        finally
+        {
+            if (generation == scanGeneration) { videoScanActive = false; mediaBusy = false; }
+        }
+    }
+
+    private async Task CancelVideoScan()
+    {
+        try { await JS.InvokeVoidAsync("spellbookMedia.cancelVideoScan"); }
+        catch (JSException) { videoScanMessage = "Could not stop the scan; wait for the current frame to finish."; }
+    }
+
+    private async Task AddVideoCandidates()
+    {
+        if (selected is null || mediaBusy) return;
+        foreach (var candidate in videoCandidates.Where(c => !string.IsNullOrWhiteSpace(c.Name) && c.Name.Trim().Length <= 200 && c.Quantity is >= 1 and <= 250))
+        {
+            var name = candidate.Name.Trim();
+            var existing = selected.Cards.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase) && string.Equals(c.Section.Trim(), "Main", StringComparison.OrdinalIgnoreCase));
+            if (existing is null) selected.Cards.Add(new DeckCard { Name = name, Quantity = candidate.Quantity });
+            else existing.Quantity = Math.Min(250, existing.Quantity + candidate.Quantity);
+        }
+        await Persist();
+        videoCandidates.Clear();
+        mediaMessage = "Reviewed video cards were added to the deck.";
+    }
+
     private async Task ReadPhoto()
     {
         if (previewDataUrl is null || mediaBusy) return;
@@ -473,6 +564,10 @@ else
     private void ClearScan()
     {
         scanGeneration++;
+        videoCandidates.Clear();
+        videoScanMessage = "";
+        if (videoScanActive) _ = JS.InvokeVoidAsync("spellbookMedia.cancelVideoScan");
+        videoScanActive = false;
         mediaNames.Clear();
         previewDataUrl = null;
         if (videoUrl is not null) _ = JS.InvokeVoidAsync("spellbookMedia.releaseVideo");

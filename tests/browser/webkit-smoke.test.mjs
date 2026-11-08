@@ -141,3 +141,26 @@ test('iPhone WebKit keeps selected photo local and requires editable card-name c
     assert.equal(await page.locator('.card-row').count(), 1);
   } finally { await context.close(); }
 });
+
+test('stack edge estimate is low-confidence when visible edges are present and unavailable otherwise', async () => {
+  const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
+  const page = await context.newPage();
+  try {
+    await openAppReady(page);
+    const result = await page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 320; canvas.height = 240;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#aaa'; ctx.fillRect(0, 0, 320, 240);
+      ctx.fillStyle = '#111';
+      for (let y = 160; y < 220; y += 8) ctx.fillRect(24, y, 272, 4);
+      const estimate = await window.spellbookMedia.estimateStackEdges(canvas.toDataURL('image/png'));
+      ctx.fillStyle = '#888'; ctx.fillRect(0, 0, 320, 240);
+      const unavailable = await window.spellbookMedia.estimateStackEdges(canvas.toDataURL('image/png'));
+      return { estimate, unavailable };
+    });
+    assert.equal(result.estimate?.confidence, 'low');
+    assert.ok(result.estimate.count >= 4);
+    assert.equal(result.unavailable, null);
+  } finally { await context.close(); }
+});
