@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using Spellbook.Components;
 using Spellbook.Models;
 using Spellbook.Pages;
@@ -69,6 +71,36 @@ public sealed class DeckListTransferTests
         file.UploadFiles(InputFileContent.CreateFromText(new string('a', 2_000_001), "large.txt"));
         Assert.Contains("smaller than 2 MB", component.Markup);
         Assert.Single(imported);
+    }
+
+    [Fact]
+    public void FailedImportCanBeRetriedWithoutLosingItsReview()
+    {
+        using var context = new BunitContext();
+        var imported = new List<Deck>();
+        var attempts = 0;
+        var component = context.Render<DeckListTransfer>(ps => ps.Add(p => p.OnImport,
+            EventCallback.Factory.Create<Deck>(this, deck =>
+            {
+                if (attempts++ == 0) throw new JSException("Quota exceeded");
+                imported.Add(deck);
+            })));
+        component.Find("textarea").Change("1 Island");
+        Button(component, "Review deck list").Click();
+        component.Find("input[type=checkbox]").Change(true);
+
+        Button(component, "Import reviewed deck").Click();
+
+        Assert.Contains("Could not save the imported deck", component.Markup);
+        Assert.Contains("Review: Imported deck", component.Markup);
+        Assert.False(Button(component, "Import reviewed deck").HasAttribute("disabled"));
+        Assert.Empty(imported);
+
+        Button(component, "Import reviewed deck").Click();
+
+        Assert.Single(imported);
+        Assert.Contains("Deck list imported as a new deck.", component.Markup);
+        Assert.Empty(component.FindAll("ul[aria-label='Deck list preview']"));
     }
 
     private static AngleSharp.Dom.IElement Button<T>(IRenderedComponent<T> component, string text) where T : Microsoft.AspNetCore.Components.IComponent =>

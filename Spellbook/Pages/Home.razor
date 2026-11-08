@@ -291,8 +291,10 @@ else
     private static string CardLabel(DeckCard card) => card.Section == "Main" ? card.Name : $"{card.Name} ({card.Section})";
     private async Task ImportDeckList(Deck deck)
     {
-        decks.Add(deck); selected = deck; lastSavedName = deck.Name;
-        await Persist();
+        var importedDecks = decks.Append(deck).ToList();
+        await Store.SaveAsync(importedDecks);
+        ClearScan();
+        decks = importedDecks; selected = deck; lastSavedName = deck.Name;
     }
     private Task ExportDamaged() => Store.ExportDamagedAsync();
     private async Task RecoverImport(InputFileChangeEventArgs e)

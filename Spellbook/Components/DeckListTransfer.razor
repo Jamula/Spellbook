@@ -1,5 +1,6 @@
 @using Spellbook.Services
 @using Spellbook.Models
+@using Microsoft.JSInterop
 @inject Microsoft.JSInterop.IJSRuntime JS
 <details>
     <summary>Import/export a Moxfield or Archidekt deck list</summary>
@@ -61,7 +62,12 @@
     private async Task ConfirmImport()
     {
         if (!confirmed || preview is null) return;
-        await OnImport.InvokeAsync(preview.Deck);
+        try { await OnImport.InvokeAsync(preview.Deck); }
+        catch (JSException)
+        {
+            message = "Could not save the imported deck. Your review is still available; free browser storage and retry.";
+            return;
+        }
         preview = null; confirmed = false; text = "";
         message = "Deck list imported as a new deck.";
     }
