@@ -208,6 +208,35 @@ public sealed class DeckEditorTests
     }
 
     [TestMethod]
+    public void AutomaticVideoScanDeduplicatesAdjacentFramesAndRequiresReviewBeforeAdding()
+    {
+        using var context = CreateContext();
+        context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("blob:local-video");
+        context.JSInterop.Setup<System.Text.Json.JsonElement>("spellbookMedia.scanVideo", _ => true)
+            .SetResult(JsonDocument.Parse("""{"frames":[{"time":0,"text":"Lightning Bolt\n{R}"},{"time":0.75,"text":"Lightning Bolt\n{R}"},{"time":1.5,"text":"Island\nBasic Land"}],"cancelled":false}""").RootElement);
+        context.JSInterop.SetupVoid("spellbookMedia.releaseVideo", _ => true).SetVoidResult();
+
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => TestChecks.Contains("No decks yet", page.Markup));
+        page.Find("[aria-label='New deck name']").Change("Video scan");
+        Button(page, "Create deck").Click();
+        page.FindComponents<InputFile>()[1].UploadFiles(
+            InputFileContent.CreateFromBinary([1, 2], "clip.mov", contentType: "video/quicktime"));
+        page.WaitForAssertion(() => TestChecks.AreEqual(1, page.FindAll("#card-video-preview").Count));
+
+        Button(page, "Scan video for cards").Click();
+        page.WaitForAssertion(() => TestChecks.AreEqual(2, page.FindAll(".video-candidate").Count));
+        TestChecks.Contains("Lightning Bolt", page.Markup);
+        TestChecks.Contains("Stack estimate: unavailable", page.Markup);
+        TestChecks.Empty(SavedDecks(context)[0].Cards);
+
+        page.FindAll(".video-candidate input[type=number]")[0].Change("3");
+        Button(page, "Add reviewed cards").Click();
+        TestChecks.AreEqual(2, SavedDecks(context)[0].Cards.Count);
+        TestChecks.AreEqual(3, SavedDecks(context)[0].Cards.Single(c => c.Name == "Lightning Bolt").Quantity);
+    }
+
+    [TestMethod]
     public void PhotoPickerRejectsUnsupportedOrOversizedMediaWithoutChangingDeck()
     {
         using var context = CreateContext();
