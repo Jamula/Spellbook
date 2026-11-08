@@ -477,7 +477,9 @@ public sealed class DeckEditorTests
         search.Input("Island");
         page.WaitForAssertion(() => TestChecks.Single(page.FindAll("[role='option']")));
         search.KeyDown("Enter");
+        page.WaitForAssertion(() => TestChecks.AreEqual("Island", search.GetAttribute("value")));
         Button(page, "Add").Click();
+        page.WaitForAssertion(() => TestChecks.AreEqual("3", page.Find(".card-row strong[aria-label='Quantity']").TextContent));
 
         var saved = TestChecks.Single(SavedDecks(context)[0].Cards);
         TestChecks.AreEqual(3, saved.Quantity);
