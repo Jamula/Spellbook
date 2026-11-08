@@ -1,40 +1,42 @@
-<section class="deck-statistics" aria-label="Deck statistics">
-    <h3>Deck statistics</h3>
-    <p>Local analysis of @analysis.Total main-deck copies. @analysis.OutsideMain copies in other sections are excluded.</p>
-    <dl>
-        <dt>Lands</dt><dd>@analysis.Lands known · @analysis.UnknownTypes unknown card types</dd>
-        <dt>Draw / ramp / removal</dt><dd>@analysis.Draw / @analysis.Ramp / @analysis.Removal user-confirmed copies · @analysis.UnknownRoles unreviewed</dd>
-    </dl>
-    <h4>Nonland mana curve</h4>
-    <p class="muted">Weighted by copies. Lands excluded; fractional values round down. Split/multiface type lines remain unknown. @analysis.UnknownMana copies need type or mana details.</p>
-    <div class="statistics-table"><table><thead><tr><th scope="col">Mana value</th>@for (var i = 0; i < 8; i++) { <th scope="col">@(i == 7 ? "7+" : i.ToString())</th> }</tr></thead><tbody><tr><th scope="row">Copies</th>@foreach (var count in analysis.Curve) { <td>@count</td> }</tr></tbody></table></div>
-    <h4>Card colors</h4>
-    <p>W white: @analysis.Colors['W'] · U blue: @analysis.Colors['U'] · B black: @analysis.Colors['B'] · R red: @analysis.Colors['R'] · G green: @analysis.Colors['G'] · C colorless: @analysis.Colors['C']. Unknown: @analysis.UnknownColors.</p>
-    <p class="muted">These are card colors, not color identity or mana production. Multicolor copies count in each color.</p>
-    <h4>Suggestions</h4>
-    <p>Playtesting advice, not legal rulings or format legality checks.</p>
-    <ul>@foreach (var advice in analysis.Advice) { <li>@advice</li> }</ul>
-    @if (Deck.Cards.Count > 0)
-    {
-        <details>
-            <summary>Review local card details</summary>
-            <p>Nothing is looked up or uploaded here. Enter printed details and confirm roles from the card's text. Blank values stay unknown. Details are included in JSON backups.</p>
-            <label>Card to review<select aria-label="Card to review" value="@selectedIndex" @onchange="SelectCard"><option value="-1">Choose a card</option>@for (var i = 0; i < Deck.Cards.Count; i++) { <option value="@i">@Deck.Cards[i].Name (@Deck.Cards[i].Section)</option> }</select></label>
-            @if (selectedCard is not null)
-            {
-                <label>Mana value<input aria-label="Card mana value" type="number" min="0" max="1000" step="any" @bind="manaValue" /></label>
-                <label>Type line<input aria-label="Card type line" maxlength="500" @bind="typeLine" /></label>
-                <label>Card colors (WUBRG, C for colorless)<input aria-label="Card colors" maxlength="5" @bind="colors" /></label>
-                <label><input aria-label="Roles reviewed" type="checkbox" @bind="rolesReviewed" /> I reviewed the card's text for these roles</label>
-                <label><input aria-label="Draw role" type="checkbox" @bind="draw" /> Draw (gains cards)</label>
-                <label><input aria-label="Ramp role" type="checkbox" @bind="ramp" /> Ramp (accelerates mana)</label>
-                <label><input aria-label="Removal role" type="checkbox" @bind="removal" /> Removal (answers threats)</label>
-                <button @onclick="SaveDetails">Save card details</button>
-                @if (error is not null) { <p role="alert">@error</p> }
-            }
-        </details>
-    }
-</section>
+<details class="deck-statistics">
+    <summary>Deck statistics</summary>
+    <div class="statistics-content">
+        <p>Local analysis of @analysis.Total main-deck copies. @analysis.OutsideMain copies in other sections are excluded.</p>
+        <dl>
+            <dt>Lands</dt><dd>@analysis.Lands known · @analysis.UnknownTypes unknown card types</dd>
+            <dt>Draw / ramp / removal</dt><dd>@analysis.Draw / @analysis.Ramp / @analysis.Removal user-confirmed copies · @analysis.UnknownRoles unreviewed</dd>
+        </dl>
+        <h4>Nonland mana curve</h4>
+        <p class="muted">Weighted by copies. Lands excluded; fractional values round down. Split/multiface type lines remain unknown. @analysis.UnknownMana copies need type or mana details.</p>
+        <div class="statistics-table"><table><thead><tr><th scope="col">Mana value</th>@for (var i = 0; i < 8; i++) { <th scope="col">@(i == 7 ? "7+" : i.ToString())</th> }</tr></thead><tbody><tr><th scope="row">Copies</th>@foreach (var count in analysis.Curve) { <td>@count</td> }</tr></tbody></table></div>
+        <h4>Card colors</h4>
+        <p>W white: @analysis.Colors['W'] · U blue: @analysis.Colors['U'] · B black: @analysis.Colors['B'] · R red: @analysis.Colors['R'] · G green: @analysis.Colors['G'] · C colorless: @analysis.Colors['C']. Unknown: @analysis.UnknownColors.</p>
+        <p class="muted">These are card colors, not color identity or mana production. Multicolor copies count in each color.</p>
+        <h4>Suggestions</h4>
+        <p>Playtesting advice, not legal rulings or format legality checks.</p>
+        <ul>@foreach (var advice in analysis.Advice) { <li>@advice</li> }</ul>
+        @if (Deck.Cards.Count > 0)
+        {
+            <details>
+                <summary>Review local card details</summary>
+                <p>Nothing is looked up or uploaded here. Enter printed details and confirm roles from the card's text. Blank values stay unknown. Details are included in JSON backups.</p>
+                <label>Card to review<select aria-label="Card to review" value="@selectedIndex" @onchange="SelectCard"><option value="-1">Choose a card</option>@for (var i = 0; i < Deck.Cards.Count; i++) { <option value="@i">@Deck.Cards[i].Name (@Deck.Cards[i].Section)</option> }</select></label>
+                @if (selectedCard is not null)
+                {
+                    <label>Mana value<input aria-label="Card mana value" type="number" min="0" max="1000" step="any" @bind="manaValue" /></label>
+                    <label>Type line<input aria-label="Card type line" maxlength="500" @bind="typeLine" /></label>
+                    <label>Card colors (WUBRG, C for colorless)<input aria-label="Card colors" maxlength="5" @bind="colors" /></label>
+                    <label><input aria-label="Roles reviewed" type="checkbox" @bind="rolesReviewed" /> I reviewed the card's text for these roles</label>
+                    <label><input aria-label="Draw role" type="checkbox" @bind="draw" /> Draw (gains cards)</label>
+                    <label><input aria-label="Ramp role" type="checkbox" @bind="ramp" /> Ramp (accelerates mana)</label>
+                    <label><input aria-label="Removal role" type="checkbox" @bind="removal" /> Removal (answers threats)</label>
+                    <button @onclick="SaveDetails">Save card details</button>
+                    @if (error is not null) { <p role="alert">@error</p> }
+                }
+            </details>
+        }
+    </div>
+</details>
 @code {
     [Parameter, EditorRequired] public Deck Deck { get; set; } = default!;
     [Parameter] public EventCallback OnChanged { get; set; }

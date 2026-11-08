@@ -102,6 +102,9 @@ public sealed class DeckAnalysisTests
             TestChecks.Throws<System.IO.InvalidDataException>(() => store.ParseImport("[{\"name\":\"Bad\",\"cards\":[{\"name\":\"Card\",\"details\":"+details+"}]}]"));
         var deck = new Deck { Cards = [new() { Name = "Side", Section = "Sideboard", Details = new() { TypeLine = "Land" } }] };
         var component = context.Render<DeckStatistics>(p => p.Add(c => c.Deck,deck));
+        var statistics = component.Find("details.deck-statistics");
+        Assert.AreEqual("Deck statistics", component.Find("details.deck-statistics > summary").TextContent.Trim());
+        Assert.IsFalse(statistics.HasAttribute("open"), "Statistics should be collapsed until the user opens the section.");
         TestChecks.Contains("1 copies in other sections",component.Markup);
         deck.Cards[0].Section = "Main";
         component.Render(p => p.Add(c => c.Deck,deck));

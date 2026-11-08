@@ -1,4 +1,7 @@
 .deck-statistics { border-top: 1px solid #ccc; margin-top: 1rem; padding-top: .5rem; }
+.deck-statistics > summary { cursor: pointer; font-weight: 700; min-height: 2.75rem; padding: .65rem .25rem; }
+.deck-statistics > summary:focus-visible { outline: 3px solid #315d48; outline-offset: 2px; border-radius: .25rem; }
+.statistics-content { padding: 0 .25rem .5rem; }
 .statistics-table { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #888; padding: .3rem; text-align: center; }
