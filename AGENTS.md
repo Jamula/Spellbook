@@ -6,4 +6,5 @@
 - Prefer browser-local deck data plus user-controlled JSON export; explain that browser storage does not sync across devices.
 - Do not upload user photos/videos automatically. Require clear consent before any remote processing.
 - Before a PR, run `dotnet restore Spellbook/Spellbook.csproj`, `dotnet build Spellbook/Spellbook.csproj -c Release`, and `dotnet publish Spellbook/Spellbook.csproj -c Release`.
+- Run the MSTest suite with .NET 10 using `dotnet test --project Spellbook.Tests/Spellbook.Tests.csproj -c Release`.
 - Reference the roadmap in #1 and use focused, testable tasks (#2-#8).

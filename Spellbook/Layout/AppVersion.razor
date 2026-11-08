@@ -1,6 +1,6 @@
 @using System.Reflection
 
-<p class="app-version">Version @version</p>
+<small class="brand-version" aria-label="Version @version">v@(version)</small>
 
 @code {
     private static readonly string version = typeof(App).Assembly

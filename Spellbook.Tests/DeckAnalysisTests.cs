@@ -1,3 +1,4 @@
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Text.Json;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,9 +9,10 @@ using Spellbook.Services;
 
 namespace Spellbook.Tests;
 
+[TestClass]
 public sealed class DeckAnalysisTests
 {
-    [Fact]
+    [TestMethod]
     public void QuantityWeightedAnalysisExplainsKnownUnknownAndSectionBoundaries()
     {
         var deck = new Deck { Cards = [
@@ -21,31 +23,31 @@ public sealed class DeckAnalysisTests
             new() { Name = "Side", Quantity = 15, Section = "Sideboard" }
         ] };
         var stats = DeckAnalysis.Calculate(deck);
-        Assert.Equal((60,15,24,0,0,0,0), (stats.Total,stats.OutsideMain,stats.Lands,stats.UnknownTypes,stats.UnknownMana,stats.UnknownColors,stats.UnknownRoles));
-        Assert.Equal([4,0,0,0,20,0,0,12], stats.Curve);
-        Assert.Equal((20,20,20), (stats.Draw,stats.Ramp,stats.Removal));
-        Assert.Equal(20,stats.Colors['G']);
-        Assert.Contains(stats.Advice, a => a.Contains("33–45%"));
-        Assert.Contains(stats.Advice, a => a.Contains("4+ mana"));
-        Assert.Contains(stats.Advice, a => a.Contains("20 draw"));
+        TestChecks.AreEqual((60,15,24,0,0,0,0), (stats.Total,stats.OutsideMain,stats.Lands,stats.UnknownTypes,stats.UnknownMana,stats.UnknownColors,stats.UnknownRoles));
+        TestChecks.AreEqual([4,0,0,0,20,0,0,12], stats.Curve);
+        TestChecks.AreEqual((20,20,20), (stats.Draw,stats.Ramp,stats.Removal));
+        TestChecks.AreEqual(20,stats.Colors['G']);
+        TestChecks.Contains(stats.Advice, a => a.Contains("33–45%"));
+        TestChecks.Contains(stats.Advice, a => a.Contains("4+ mana"));
+        TestChecks.Contains(stats.Advice, a => a.Contains("20 draw"));
         deck.Cards[0].Quantity = 1;
-        Assert.Contains(DeckAnalysis.Calculate(deck).Advice,a => a.Contains("below 33%"));
+        TestChecks.Contains(DeckAnalysis.Calculate(deck).Advice,a => a.Contains("below 33%"));
         deck.Cards[0].Quantity = 100;
-        Assert.Contains(DeckAnalysis.Calculate(deck).Advice,a => a.Contains("above 45%"));
+        TestChecks.Contains(DeckAnalysis.Calculate(deck).Advice,a => a.Contains("above 45%"));
         deck.Format = "Two-Headed Giant";
         deck.Cards.Add(new() { Name = "Unknown", Quantity = 2 });
         deck.Cards.Add(new() { Name = "Bad mana", Quantity = 3, Details = new() { ManaValue = double.NaN, TypeLine = "Artifact", Colors = "CX" } });
         deck.Cards.Add(new() { Name = "Negative mana", Details = new() { ManaValue = -1, TypeLine = "Artifact", Colors = "" } });
         stats = DeckAnalysis.Calculate(deck);
-        Assert.Equal((2,6,6,6), (stats.UnknownTypes,stats.UnknownMana,stats.UnknownColors,stats.UnknownRoles));
-        Assert.Contains(stats.Advice,a => a.Contains("teammate"));
-        Assert.Contains(stats.Advice,a => a.Contains("unknown"));
-        Assert.Single(DeckAnalysis.Calculate(new()).Advice);
+        TestChecks.AreEqual((2,6,6,6), (stats.UnknownTypes,stats.UnknownMana,stats.UnknownColors,stats.UnknownRoles));
+        TestChecks.Contains(stats.Advice,a => a.Contains("teammate"));
+        TestChecks.Contains(stats.Advice,a => a.Contains("unknown"));
+        TestChecks.Single(DeckAnalysis.Calculate(new()).Advice);
         var multiface = DeckAnalysis.Calculate(new() { Cards = [new() { Name = "Two faces", Details = new() { TypeLine = "Creature // Land", ManaValue = 3, Colors = "G" } }] });
-        Assert.Equal((0,1,1), (multiface.Lands,multiface.UnknownTypes,multiface.UnknownMana));
+        TestChecks.AreEqual((0,1,1), (multiface.Lands,multiface.UnknownTypes,multiface.UnknownMana));
     }
 
-    [Fact]
+    [TestMethod]
     public void LocalMetadataWorkflowPersistsRecalculatesAndSurvivesBackupRoundtrip()
     {
         using var context = new BunitContext();
@@ -53,60 +55,60 @@ public sealed class DeckAnalysisTests
         context.JSInterop.SetupVoid("spellbookStorage.set", _ => true).SetVoidResult();
         context.Services.AddScoped<DeckStore>();
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("4 unknown card types", page.Markup));
+        page.WaitForAssertion(() => TestChecks.Contains("4 unknown card types", page.Markup));
         page.Find("[aria-label='Card to review']").Change("-1");
         page.Find("[aria-label='Card to review']").Change("0");
         page.Find("[aria-label='Card mana value']").Change("-1");
         Save(page);
-        Assert.Contains("Use a mana value",page.Markup);
+        TestChecks.Contains("Use a mana value",page.Markup);
         page.Find("[aria-label='Card mana value']").Change("2");
         page.Find("[aria-label='Card type line']").Change("Sorcery");
         page.Find("[aria-label='Card colors']").Change("RX");
         Save(page);
-        Assert.Contains("Use a mana value",page.Markup);
+        TestChecks.Contains("Use a mana value",page.Markup);
         page.Find("[aria-label='Card colors']").Change(" r ");
         page.Find("[aria-label='Roles reviewed']").Change(true);
         page.Find("[aria-label='Draw role']").Change(true);
         page.Find("[aria-label='Ramp role']").Change(true);
         page.Find("[aria-label='Removal role']").Change(true);
         Save(page);
-        Assert.Contains("4 / 4 / 4 user-confirmed", page.Markup);
+        TestChecks.Contains("4 / 4 / 4 user-confirmed", page.Markup);
         var saved = (string)context.JSInterop.Invocations.Last(i => i.Identifier == "spellbookStorage.set").Arguments[1]!;
         var store = context.Services.GetRequiredService<DeckStore>();
-        Assert.Equal("R",Assert.Single(Assert.Single(store.ParseImport(saved)).Cards).Details!.Colors);
+        TestChecks.AreEqual("R",TestChecks.Single(TestChecks.Single(store.ParseImport(saved)).Cards).Details!.Colors);
         page.Find("[aria-label='Increase quantity for Example']").Click();
-        Assert.Contains("5 / 5 / 5 user-confirmed",page.Markup);
+        TestChecks.Contains("5 / 5 / 5 user-confirmed",page.Markup);
         page.Find(".editor > label select").Change("Two-Headed Giant");
-        Assert.Contains("compare these counts with your teammate",page.Markup);
+        TestChecks.Contains("compare these counts with your teammate",page.Markup);
         page.Find("[aria-label='Card to review']").Change("0");
-        Assert.Equal("R",page.Find("[aria-label='Card colors']").GetAttribute("value"));
+        TestChecks.AreEqual("R",page.Find("[aria-label='Card colors']").GetAttribute("value"));
         page.Find("[aria-label='Card mana value']").Change("");
         page.Find("[aria-label='Card colors']").Change("");
         page.Find("[aria-label='Card type line']").Change("");
         page.Find("[aria-label='Roles reviewed']").Change(false);
         Save(page);
-        Assert.Contains("5 unknown card types",page.Markup);
+        TestChecks.Contains("5 unknown card types",page.Markup);
         page.Find("[aria-label='Remove Example']").Click();
-        Assert.Contains("Add cards to the main deck",page.Markup);
+        TestChecks.Contains("Add cards to the main deck",page.Markup);
     }
 
-    [Fact]
+    [TestMethod]
     public void LegacyMetadataAndMalformedBackupsKeepImportBoundaryExplicit()
     {
         using var context = new BunitContext();
         var store = new DeckStore(context.JSInterop.JSRuntime);
-        Assert.Null(store.ParseImport("[{\"name\":\"Legacy\",\"cards\":[{\"name\":\"Card\"}]}]")[0].Cards[0].Details);
+        TestChecks.IsNull(store.ParseImport("[{\"name\":\"Legacy\",\"cards\":[{\"name\":\"Card\"}]}]")[0].Cards[0].Details);
         foreach (var details in new[] { "{\"manaValue\":-1}", "{\"manaValue\":1001}", "{\"colors\":\"XC\"}", "{\"colors\":\"CW\"}", "{\"colors\":\"WWWWWW\"}", "{\"typeLine\":\"" + new string('x',501) + "\"}" })
-            Assert.Throws<System.IO.InvalidDataException>(() => store.ParseImport("[{\"name\":\"Bad\",\"cards\":[{\"name\":\"Card\",\"details\":"+details+"}]}]"));
+            TestChecks.Throws<System.IO.InvalidDataException>(() => store.ParseImport("[{\"name\":\"Bad\",\"cards\":[{\"name\":\"Card\",\"details\":"+details+"}]}]"));
         var deck = new Deck { Cards = [new() { Name = "Side", Section = "Sideboard", Details = new() { TypeLine = "Land" } }] };
         var component = context.Render<DeckStatistics>(p => p.Add(c => c.Deck,deck));
-        Assert.Contains("1 copies in other sections",component.Markup);
+        TestChecks.Contains("1 copies in other sections",component.Markup);
         deck.Cards[0].Section = "Main";
         component.Render(p => p.Add(c => c.Deck,deck));
-        Assert.Contains("1 known",component.Markup);
+        TestChecks.Contains("1 known",component.Markup);
         component.Find("[aria-label='Card to review']").Change("0");
         component.Render(p => p.Add(c => c.Deck,new Deck()));
-        Assert.Empty(component.FindAll("[aria-label='Card mana value']"));
+        TestChecks.Empty(component.FindAll("[aria-label='Card mana value']"));
     }
 
     private static void Save(IRenderedComponent<Home> page) => page.FindAll("button").Single(b => b.TextContent == "Save card details").Click();

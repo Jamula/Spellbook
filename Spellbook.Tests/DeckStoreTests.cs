@@ -1,3 +1,4 @@
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Text.Json;
 using Microsoft.JSInterop;
 using Spellbook.Models;
@@ -5,43 +6,44 @@ using Spellbook.Services;
 
 namespace Spellbook.Tests;
 
+[TestClass]
 public sealed class DeckStoreTests
 {
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" ")]
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("")]
+    [DataRow(" ")]
     public async Task LoadReturnsEmptyForMissingStorage(string? json)
     {
         var js = new StorageRuntime { StoredJson = json };
 
-        Assert.Empty(await new DeckStore(js).LoadAsync());
-        Assert.Equal("spellbookStorage.get", js.LastCall);
-        Assert.Equal("spellbook.decks.v1", Assert.Single(js.LastArguments));
+        TestChecks.Empty(await new DeckStore(js).LoadAsync());
+        TestChecks.AreEqual("spellbookStorage.get", js.LastCall);
+        TestChecks.AreEqual("spellbook.decks.v1", TestChecks.Single(js.LastArguments));
     }
 
-    [Theory]
-    [InlineData("null")]
-    [InlineData("not json")]
-    [InlineData("{}")]
+    [TestMethod]
+    [DataRow("null")]
+    [DataRow("not json")]
+    [DataRow("{}")]
     public async Task LoadRejectsInvalidStorageWithoutSaving(string json)
     {
         var js = new StorageRuntime { StoredJson = json };
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => new DeckStore(js).LoadAsync());
-        Assert.Equal("spellbookStorage.get", js.LastCall);
+        await TestChecks.ThrowsAsync<InvalidDataException>(() => new DeckStore(js).LoadAsync());
+        TestChecks.AreEqual("spellbookStorage.get", js.LastCall);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task LoadRejectsUnavailableBrowserStorage()
     {
         var js = new StorageRuntime { Failure = new JSException("Storage unavailable") };
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => new DeckStore(js).LoadAsync());
-        Assert.Equal("spellbookStorage.get", js.LastCall);
+        await TestChecks.ThrowsAsync<InvalidDataException>(() => new DeckStore(js).LoadAsync());
+        TestChecks.AreEqual("spellbookStorage.get", js.LastCall);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SaveAndLoadPreserveDecksAndCardData()
     {
         var js = new StorageRuntime();
@@ -56,23 +58,23 @@ public sealed class DeckStoreTests
 
         await store.SaveAsync([deck]);
 
-        Assert.Equal("spellbookStorage.set", js.LastCall);
-        Assert.Equal("spellbook.decks.v1", js.LastArguments[0]);
-        var saved = Assert.Single(store.ParseImport(js.StoredJson!));
-        Assert.Equal(deck.Id, saved.Id);
-        var loaded = Assert.Single(await store.LoadAsync());
-        Assert.Equal(deck.Id, loaded.Id);
-        Assert.Equal(deck.Name, loaded.Name);
-        Assert.Equal(deck.Format, loaded.Format);
-        Assert.Equal(deck.UpdatedUtc, loaded.UpdatedUtc);
-        var card = Assert.Single(loaded.Cards);
-        Assert.Equal("Lightning Bolt", card.Name);
-        Assert.Equal(4, card.Quantity);
-        Assert.Equal("Sideboard", card.Section);
-        Assert.Equal(4, loaded.CardCount);
+        TestChecks.AreEqual("spellbookStorage.set", js.LastCall);
+        TestChecks.AreEqual("spellbook.decks.v1", js.LastArguments[0]);
+        var saved = TestChecks.Single(store.ParseImport(js.StoredJson!));
+        TestChecks.AreEqual(deck.Id, saved.Id);
+        var loaded = TestChecks.Single(await store.LoadAsync());
+        TestChecks.AreEqual(deck.Id, loaded.Id);
+        TestChecks.AreEqual(deck.Name, loaded.Name);
+        TestChecks.AreEqual(deck.Format, loaded.Format);
+        TestChecks.AreEqual(deck.UpdatedUtc, loaded.UpdatedUtc);
+        var card = TestChecks.Single(loaded.Cards);
+        TestChecks.AreEqual("Lightning Bolt", card.Name);
+        TestChecks.AreEqual(4, card.Quantity);
+        TestChecks.AreEqual("Sideboard", card.Section);
+        TestChecks.AreEqual(4, loaded.CardCount);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task ExportDownloadsImportableJson()
     {
         var js = new StorageRuntime();
@@ -81,153 +83,153 @@ public sealed class DeckStoreTests
 
         await store.ExportAsync([deck]);
 
-        Assert.Equal("spellbookStorage.download", js.LastCall);
-        Assert.Equal("spellbook-decks.json", js.LastArguments[0]);
-        var imported = Assert.Single(store.ParseImport(Assert.IsType<string>(js.LastArguments[1])));
-        Assert.Equal(deck.Id, imported.Id);
-        Assert.Equal(deck.Name, imported.Name);
+        TestChecks.AreEqual("spellbookStorage.download", js.LastCall);
+        TestChecks.AreEqual("spellbook-decks.json", js.LastArguments[0]);
+        var imported = TestChecks.Single(store.ParseImport(TestChecks.IsType<string>(js.LastArguments[1])));
+        TestChecks.AreEqual(deck.Id, imported.Id);
+        TestChecks.AreEqual(deck.Name, imported.Name);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task SaveReportsStorageFailureRatherThanSilentlyLosingChanges()
     {
         var store = new DeckStore(new StorageRuntime { Failure = new JSException("Quota exceeded") });
 
-        await Assert.ThrowsAsync<JSException>(() => store.SaveAsync([new Deck()]));
+        await TestChecks.ThrowsAsync<JSException>(() => store.SaveAsync([new Deck()]));
     }
 
-    [Theory]
-    [InlineData("null")]
-    [InlineData("not json")]
-    [InlineData("{}")]
+    [TestMethod]
+    [DataRow("null")]
+    [DataRow("not json")]
+    [DataRow("{}")]
     public void ImportRejectsInvalidCollections(string json)
     {
         var store = new DeckStore(new StorageRuntime());
 
         if (json == "not json")
-            Assert.ThrowsAny<JsonException>(() => store.ParseImport(json));
+            TestChecks.ThrowsAny<JsonException>(() => store.ParseImport(json));
         else
-            Assert.Throws<InvalidDataException>(() => store.ParseImport(json));
+            TestChecks.Throws<InvalidDataException>(() => store.ParseImport(json));
     }
 
-    [Fact]
+    [TestMethod]
     public void ImportRejectsMissingRequiredNamesAndCards()
     {
         var store = new DeckStore(new StorageRuntime());
 
-        Assert.Throws<InvalidDataException>(() => store.ParseImport("[{\"cards\":[]}]"));
-        Assert.Throws<InvalidDataException>(() => store.ParseImport("[{\"name\":null,\"cards\":[]}]"));
-        Assert.Throws<InvalidDataException>(() => store.ParseImport("[{\"name\":\"Imported deck\",\"cards\":null}]"));
-        Assert.Empty(store.ParseImport("[]"));
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport("[{\"cards\":[]}]"));
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport("[{\"name\":null,\"cards\":[]}]"));
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport("[{\"name\":\"Imported deck\",\"cards\":null}]"));
+        TestChecks.Empty(store.ParseImport("[]"));
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    [InlineData(251)]
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(-1)]
+    [DataRow(251)]
     public void ImportRejectsOutOfRangeCardQuantities(int quantity)
     {
         var store = new DeckStore(new StorageRuntime());
         var json = JsonSerializer.Serialize(new[] { new Deck { Cards = [new DeckCard { Quantity = quantity }] } });
 
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(json));
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(json));
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(250)]
+    [TestMethod]
+    [DataRow(1)]
+    [DataRow(250)]
     public void ImportAcceptsBoundaryCardQuantities(int quantity)
     {
         var store = new DeckStore(new StorageRuntime());
         var json = JsonSerializer.Serialize(new[] { new Deck { Cards = [new DeckCard { Name = "Card", Quantity = quantity }] } });
 
-        Assert.Equal(quantity, Assert.Single(store.ParseImport(json)).CardCount);
+        TestChecks.AreEqual(quantity, TestChecks.Single(store.ParseImport(json)).CardCount);
     }
 
-    [Theory]
-    [InlineData(500, true)]
-    [InlineData(501, false)]
+    [TestMethod]
+    [DataRow(500, true)]
+    [DataRow(501, false)]
     public void ImportEnforcesDeckLimit(int count, bool accepted)
     {
         var store = new DeckStore(new StorageRuntime());
         var json = JsonSerializer.Serialize(Enumerable.Range(0, count).Select(_ => new Deck()));
 
-        if (accepted) Assert.Equal(count, store.ParseImport(json).Count);
-        else Assert.Throws<InvalidDataException>(() => store.ParseImport(json));
+        if (accepted) TestChecks.AreEqual(count, store.ParseImport(json).Count);
+        else TestChecks.Throws<InvalidDataException>(() => store.ParseImport(json));
     }
 
-    [Theory]
-    [InlineData(1000, true)]
-    [InlineData(1001, false)]
+    [TestMethod]
+    [DataRow(1000, true)]
+    [DataRow(1001, false)]
     public void ImportEnforcesCardsPerDeckLimit(int count, bool accepted)
     {
         var store = new DeckStore(new StorageRuntime());
         var deck = new Deck { Cards = Enumerable.Range(0, count).Select(i => new DeckCard { Name = $"Card {i}" }).ToList() };
         var json = JsonSerializer.Serialize(new[] { deck });
 
-        if (accepted) Assert.Equal(count, Assert.Single(store.ParseImport(json)).Cards.Count);
-        else Assert.Throws<InvalidDataException>(() => store.ParseImport(json));
+        if (accepted) TestChecks.AreEqual(count, TestChecks.Single(store.ParseImport(json)).Cards.Count);
+        else TestChecks.Throws<InvalidDataException>(() => store.ParseImport(json));
     }
 
-    [Fact]
+    [TestMethod]
     public void CardCountSumsQuantitiesAcrossCards()
     {
         var deck = new Deck();
-        Assert.Equal(0, deck.CardCount);
+        TestChecks.AreEqual(0, deck.CardCount);
 
         deck.Cards = [new DeckCard { Quantity = 4 }, new DeckCard { Quantity = 2 }];
 
-        Assert.Equal(6, deck.CardCount);
+        TestChecks.AreEqual(6, deck.CardCount);
     }
 
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("  ")]
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("  ")]
     public void ImportRejectsBlankContent(string json)
     {
         var store = new DeckStore(new StorageRuntime());
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(json));
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(json));
     }
 
-    [Theory]
-    [InlineData("[null]")]
-    [InlineData("[10]")]
-    [InlineData("[{}]")]
-    [InlineData("[{\"name\":\"\",\"cards\":[]}]")]
-    [InlineData("[{\"name\":\"Deck\",\"format\":\"\",\"cards\":[]}]")]
-    [InlineData("[{\"name\":\"Deck\",\"cards\":[null]}]")]
-    [InlineData("[{\"name\":\"Deck\",\"cards\":[{\"name\":\"\",\"quantity\":1}]}]")]
-    [InlineData("[{\"name\":\"Deck\",\"cards\":[{\"name\":\"Bolt\",\"quantity\":1,\"section\":\"\"}]}]")]
+    [TestMethod]
+    [DataRow("[null]")]
+    [DataRow("[10]")]
+    [DataRow("[{}]")]
+    [DataRow("[{\"name\":\"\",\"cards\":[]}]")]
+    [DataRow("[{\"name\":\"Deck\",\"format\":\"\",\"cards\":[]}]")]
+    [DataRow("[{\"name\":\"Deck\",\"cards\":[null]}]")]
+    [DataRow("[{\"name\":\"Deck\",\"cards\":[{\"name\":\"\",\"quantity\":1}]}]")]
+    [DataRow("[{\"name\":\"Deck\",\"cards\":[{\"name\":\"Bolt\",\"quantity\":1,\"section\":\"\"}]}]")]
     public void ImportRejectsCorruptDeckAndCardRecords(string json)
     {
         var store = new DeckStore(new StorageRuntime());
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(json));
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(json));
     }
 
-    [Fact]
+    [TestMethod]
     public void ImportRejectsOversizedNamesAndFormats()
     {
         var store = new DeckStore(new StorageRuntime());
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[]
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[]
         {
             new Deck { Name = new string('N', 161) }
         })));
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[]
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[]
         {
             new Deck { Format = new string('F', 81) }
         })));
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[]
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[]
         {
             new Deck { Cards = [new DeckCard { Name = new string('C', 201) }] }
         })));
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[]
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[]
         {
             new Deck { Cards = [new DeckCard { Section = new string('S', 81) }] }
         })));
     }
 
-    [Fact]
+    [TestMethod]
     public void ImportRejectsDuplicateCardNamesIgnoringCaseWithinASection()
     {
         var store = new DeckStore(new StorageRuntime());
@@ -238,36 +240,36 @@ public sealed class DeckStoreTests
                 new DeckCard { Name = "lightning bolt", Section = "Main" }
             ]
         };
-        Assert.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[] { deck })));
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[] { deck })));
 
         deck.Cards[1].Section = "Sideboard";
-        Assert.Equal(2, Assert.Single(store.ParseImport(JsonSerializer.Serialize(new[] { deck }))).Cards.Count);
+        TestChecks.AreEqual(2, TestChecks.Single(store.ParseImport(JsonSerializer.Serialize(new[] { deck }))).Cards.Count);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task RecoveryDownloadDoesNotOverwriteEmptyOrUnavailableStorage()
     {
         var runtime = new StorageRuntime { StoredJson = null };
         var store = new DeckStore(runtime);
         await store.ExportDamagedAsync();
-        Assert.Equal("spellbookStorage.get", runtime.LastCall);
+        TestChecks.AreEqual("spellbookStorage.get", runtime.LastCall);
 
         runtime.StoredJson = "  ";
         await store.ExportDamagedAsync();
-        Assert.Equal("spellbookStorage.get", runtime.LastCall);
+        TestChecks.AreEqual("spellbookStorage.get", runtime.LastCall);
 
         runtime.StoredJson = "corrupted backup";
         await store.ExportDamagedAsync();
-        Assert.Equal("spellbookStorage.download", runtime.LastCall);
-        Assert.Equal("spellbook-recovery-raw.json", runtime.LastArguments[0]);
-        Assert.Equal("corrupted backup", runtime.LastArguments[1]);
+        TestChecks.AreEqual("spellbookStorage.download", runtime.LastCall);
+        TestChecks.AreEqual("spellbook-recovery-raw.json", runtime.LastArguments[0]);
+        TestChecks.AreEqual("corrupted backup", runtime.LastArguments[1]);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task ExportSurfacesBrowserDownloadExceptions()
     {
         var store = new DeckStore(new StorageRuntime { Failure = new JSException("download denied") });
-        await Assert.ThrowsAsync<JSException>(() => store.ExportAsync([new Deck()]));
+        await TestChecks.ThrowsAsync<JSException>(() => store.ExportAsync([new Deck()]));
     }
 
     private sealed class StorageRuntime : IJSRuntime

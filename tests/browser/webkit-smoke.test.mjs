@@ -67,14 +67,17 @@ test('iPhone WebKit creates a deck, edits a card and persists after reload', asy
     await page.getByRole('button', { name: 'Create deck' }).waitFor({ timeout: 30000 });
     await page.getByRole('textbox', { name: 'New deck name' }).fill('WebKit smoke deck');
     await page.getByRole('button', { name: 'Create deck' }).click();
-    await page.getByRole('heading', { name: 'WebKit smoke deck' }).waitFor();
+    await page.getByRole('heading', { name: 'WebKit smoke deck', level: 1 }).waitFor();
     await page.getByRole('textbox', { name: 'Card name' }).fill('Avacyn, Angel of Hope');
     await page.getByRole('button', { name: 'Add', exact: true }).click();
     await page.getByText('Avacyn, Angel of Hope', { exact: true }).first().waitFor();
-    await page.reload();
-    await page.getByRole('heading', { name: 'WebKit smoke deck' }).waitFor({ timeout: 30000 });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const openDeck = page.getByRole('button', { name: 'Open deck' });
+    await openDeck.waitFor({ timeout: 30000 });
+    await openDeck.click();
+    await page.getByRole('heading', { name: 'WebKit smoke deck', level: 1 }).waitFor({ timeout: 30000 });
     await page.getByText('Avacyn, Angel of Hope', { exact: true }).first().waitFor();
-    assert.match(await page.locator('.app-version').innerText(), /^Version 0\.1\.\d+/);
+    assert.match(await page.locator('.brand-version').innerText(), /^v0\.1\.\d+/);
   } finally {
     await context.close();
   }
