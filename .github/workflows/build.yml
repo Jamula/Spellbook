@@ -118,6 +118,8 @@ jobs:
         run: node --test tests/feedback-worker.test.mjs
       - name: Test Scryfall substring search
         run: node --test tests/scryfall-search.test.mjs
+      - name: Test local video metadata readiness
+        run: node --test tests/media-video.test.mjs
       - name: Test with Cobertura coverage
         id: tests
         run: >-
