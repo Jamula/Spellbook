@@ -33,7 +33,8 @@ Run the component workflow, persistence, import validation, export, and card-cou
 
 ```bash
 dotnet test --project Spellbook.Tests/Spellbook.Tests.csproj -c Release --results-directory coverage --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --coverage-settings coverage.runsettings --report-trx --report-trx-filename tests.trx
-dotnet run --project .github/scripts/CoverageChecker/CoverageChecker.csproj -c Release -- coverage/coverage.cobertura.xml
+cp coverage/coverage.cobertura.xml coverage.cobertura.xml
+dotnet run --project .github/scripts/CoverageChecker/CoverageChecker.csproj -c Release -- coverage.cobertura.xml
 ```
 
 Use a fresh `coverage` directory for each run. Coverage measures the application assembly, including UI code; test code and generated build files are excluded. Two bUnit component tests exercise the rendered deck editor: deck/card editing and restoration/import/export/media selection. The tests use a fake browser storage boundary. They do not measure JavaScript or replace browser testing.
