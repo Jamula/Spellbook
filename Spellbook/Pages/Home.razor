@@ -58,6 +58,7 @@ else
                     <div class="card-row"><span><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @card.Name on Scryfall">@card.Name</a></span><div class="row-actions"><button aria-label="Decrease quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong>@card.Quantity</strong><button aria-label="Increase quantity for @card.Name" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @card.Name" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></div>
                 }
                 </div>
+                <Spellbook.Components.DeckStatistics Deck="selected" OnChanged="Persist" />
                 <section class="card-scan-panel" aria-label="Scan a card">
                     <h3>Scan a card from a photo or video</h3>
                     <p>Choose a photo, an iPhone HEIC image, or a video. For a video, scrub to the frame you want and tap Capture frame. Your media stays on this device; OCR runs locally. HEIC conversion and OCR libraries may be downloaded from a CDN on first use; media is not uploaded.</p>

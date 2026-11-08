@@ -58,3 +58,21 @@ GitHub Actions runs the tests, enforces an 80% minimum application line coverage
 
 ## Proposed repository
 `jamula/spellbook` (private). No GitHub repository is created by this archive.
+
+Deck statistics run locally and recompute when you edit the selected deck. Open
+**Review local card details** to enter printed mana values, type lines and card
+colors (`WUBRG`, or `C` for colorless), and explicitly review draw/ramp/removal
+roles. Counts are weighted by quantity and include only the `Main` section;
+other sections are reported separately. Multicolor cards contribute to every
+listed color. The curve excludes known lands and groups mana values of 7 or
+more; fractional values round down. A blank detail is unknown, not zero. Split/multiface type lines remain
+unknown because a single combined type line cannot establish which face is played. Role
+counts are user-confirmed labels, can overlap, and do not prove a card's rules
+behavior. Advice explains its basis and is for playtesting, not legality rulings.
+
+Optional card details survive local storage and JSON export/import. Legacy
+backups still load; malformed detail values are rejected through the existing
+backup-recovery flow without overwriting saved data. This feature makes no
+network calls. A future confirmed Scryfall lookup can prefill
+`DeckCard.Details.ManaValue` and `TypeLine` from its existing `ScryfallCard`
+contract; colors and roles must stay unknown until supported or reviewed.
