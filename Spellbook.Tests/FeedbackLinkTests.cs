@@ -35,17 +35,18 @@ public sealed class FeedbackLinkTests
     }
 
     [Fact]
-    public void ValidationRequiresExplicitPublicConsentAndNeverSubmitsIncompleteFeedback()
+    public void UnconfiguredServiceDisablesSubmitAndProvidesDirectIssueFallback()
     {
         using var context = Context(configured: false);
         var page = context.Render<FeedbackLink>();
         page.Find(".feedback-link").Click();
-        Assert.Contains("not configured yet", page.Markup);
+        Assert.Contains("In-app feedback is unavailable", page.Markup);
         Assert.Equal("https://github.com/Jamula/Spellbook/issues/new", page.Find("a[href*=\"/issues/new\"]").GetAttribute("href"));
+        var submit = page.Find(".feedback-actions button:last-child");
+        Assert.True(submit.HasAttribute("disabled"));
         page.Find("#feedback-subject").Input("Hi");
         page.Find("#feedback-details").Input("short");
-        page.Find(".feedback-actions button:last-child").Click();
-        Assert.Contains("Enter a title", page.Markup);
+        Assert.True(page.Find(".feedback-actions button:last-child").HasAttribute("disabled"));
         Assert.Empty(context.JSInterop.Invocations["spellbookFeedback.submit"]);
     }
 
@@ -60,7 +61,9 @@ public sealed class FeedbackLinkTests
         page.Find(".feedback-link").Click();
         page.Find("#feedback-subject").Input("Missing card ability");
         page.Find("#feedback-details").Input("Opening a card does not display its abilities yet.");
+        Assert.True(page.Find(".feedback-actions button:last-child").HasAttribute("disabled"));
         page.Find(".feedback-consent input").Change(true);
+        Assert.False(page.Find(".feedback-actions button:last-child").HasAttribute("disabled"));
         page.Find(".feedback-actions button:last-child").Click();
         if (valid)
         {
