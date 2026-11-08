@@ -65,7 +65,7 @@ Open **Import/export a Moxfield or Archidekt deck list** below the deck editor. 
 
 Supported interchange formats:
 
-- Plain text: `4 Lightning Bolt`, `1x Sol Ring`, optional `(SET) collector-number` printing suffixes, and headings `Mainboard`, `Sideboard`, `Commander`, `Maybeboard` (optional colon/brackets). `SB: 2 Negate` is also accepted. Split card names such as `Fire // Ice` are preserved.
+- Plain text: `4 Lightning Bolt`, `1x Sol Ring`, optional `(SET) collector-number` printing suffixes, and headings `Mainboard`, `Sideboard`, `Commander`, `Maybeboard` (optional colon/brackets). `SB: 2 Negate` is also accepted. This quantity/name syntax supports Scryfall-style pasted lists; no Scryfall account, URL, or API is used. Split card names such as `Fire // Ice` are preserved.
 - Archidekt-style text: `1x Sol Ring (CMM) 410 [Mainboard]`. Recognized board tags set the zone. Custom categories such as `[Ramp]` are omitted with a review warning.
 - Comma-delimited CSV: `Quantity,Name,Board`, with aliases `Count`/`Qty`, `Card Name`/`Card`, and `Section`/`Categories`/`Category`. Quoted names containing commas or quotes are supported. A `Commander` column of `true` or `1` marks the command zone. Unknown categories default to Main with a warning; conflicting board categories are rejected.
 
@@ -73,7 +73,7 @@ Quantities must be 1–250; duplicate names in the same zone are combined only w
 
 **Export deck TXT/CSV** downloads the selected deck in normalized common interchange syntax. Select a matching text or CSV import option at the destination and review it there; site-specific custom CSV schemas may need column mapping. Quantities and supported zones round-trip through Spellbook. Card printings, foil choices, prices, custom tags/categories, and deck metadata are not included. Custom zones or unsafe names are rejected on deck-list export; use **Export JSON** for lossless Spellbook collection backups.
 
-The small representative examples in [`samples/decklists`](samples/decklists) cover Moxfield-style text, Archidekt-style text, and Archidekt-style CSV. They are illustrative exports, not downloads from a user's account. Automated tests import each example and round-trip every card's name, quantity, and zone through both output formats.
+The small representative examples in [`samples/decklists`](samples/decklists) cover Moxfield-style text, Archidekt-style text/CSV, and Scryfall-compatible quantity/name text. They are illustrative exports, not downloads from an account. Automated tests import each example and round-trip every card's name, quantity, and zone through both output formats.
 
 ## Deck statistics and local card details
 
