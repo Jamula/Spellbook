@@ -357,6 +357,69 @@ public sealed class DeckEditorTests
     }
 
     [TestMethod]
+    public async Task RenameRechecksCanonicalDuplicatesAfterLookupCompletes()
+    {
+        var deck = new Deck
+        {
+            Name = "Test deck",
+            Cards = [new DeckCard { Name = "Known card", Section = "Main", Quantity = 2 }]
+        };
+        using var context = CreateContext(JsonSerializer.Serialize(new[] { deck }));
+        var delayedJs = new DelayedExactJsRuntime(context.JSInterop.JSRuntime);
+        context.Services.AddSingleton<IJSRuntime>(delayedJs);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => TestChecks.Contains("Known card", page.Markup));
+
+        page.Find("button[aria-label='Edit card name for Known card']").Click();
+        page.Find("input[aria-label='New card name for Known card']").Input("An alias");
+        var save = page.Find("button[aria-label='Save card name for Known card']").ClickAsync();
+        await delayedJs.LookupStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await page.InvokeAsync(() =>
+        {
+            page.Find("[aria-label='Card name']").Change("Canonical card");
+            Button(page, "Add").Click();
+        });
+        delayedJs.Complete(new ScryfallCard { Name = "Canonical card", Colors = ["U"] });
+        await save;
+
+        TestChecks.Contains("already exists in this section", page.Markup);
+        var saved = SavedDecks(context)[0].Cards;
+        TestChecks.AreEqual(2, saved.Count);
+        TestChecks.Contains(saved, card => card.Name == "Known card" && card.Quantity == 2);
+        TestChecks.Contains(saved, card => card.Name == "Canonical card" && card.Quantity == 1);
+    }
+
+    [TestMethod]
+    public void VerifiedColorlessCardsReplaceStaleColorsAndMarkNewCardsColorless()
+    {
+        var deck = new Deck
+        {
+            Name = "Test deck",
+            Cards = [new DeckCard { Name = "Old name", Details = new CardDetails { Colors = "W" } }]
+        };
+        using var context = CreateContext(JsonSerializer.Serialize(new[] { deck }));
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
+            .SetResult(new ScryfallCard { Name = "Colorless card", ManaValue = 3, TypeLine = "Artifact" });
+        context.JSInterop.Setup<ScryfallCard[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult([new ScryfallCard { Name = "Colorless artifact", ManaValue = 2, TypeLine = "Artifact" }]);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => TestChecks.Contains("Old name", page.Markup));
+
+        page.Find("button[aria-label='Edit card name for Old name']").Click();
+        page.Find("input[aria-label='New card name for Old name']").Input("Colorless card");
+        page.Find("button[aria-label='Save card name for Old name']").Click();
+        page.WaitForAssertion(() => TestChecks.AreEqual("C", SavedDecks(context)[0].Cards[0].Details!.Colors));
+
+        var search = page.Find("[aria-label='Card name']");
+        search.Input("Colorless artifact");
+        page.WaitForAssertion(() => TestChecks.Single(page.FindAll("[role='option']")));
+        search.KeyDown("Enter");
+        Button(page, "Add").Click();
+        page.WaitForAssertion(() => TestChecks.AreEqual("C", SavedDecks(context)[0].Cards.Single(card => card.Name == "Colorless artifact").Details!.Colors));
+    }
+
+    [TestMethod]
     public void UnverifiableCardNameDoesNotReplaceTheSavedName()
     {
         var original = new Deck { Name = "Test deck", Cards = [new DeckCard { Name = "Known card", Quantity = 2 }] };
@@ -769,6 +832,32 @@ public sealed class DeckEditorTests
     }
 
     private sealed record InitialDeckStorage(string Json);
+
+    private sealed class DelayedExactJsRuntime(IJSRuntime inner) : IJSRuntime
+    {
+        private readonly TaskCompletionSource<ScryfallCard?> lookup = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> LookupStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void Complete(ScryfallCard card) => lookup.SetResult(card);
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) =>
+            InvokeAsync<TValue>(identifier, CancellationToken.None, args);
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
+        {
+            if (identifier == "spellbookScryfall.exact")
+            {
+                LookupStarted.TrySetResult(true);
+                return new ValueTask<TValue>(WaitForLookup<TValue>());
+            }
+            return inner.InvokeAsync<TValue>(identifier, cancellationToken, args);
+        }
+
+        private async Task<TValue> WaitForLookup<TValue>()
+        {
+            var result = await lookup.Task.ConfigureAwait(false);
+            return (TValue)(object?)result!;
+        }
+    }
 
     private static List<Deck> ReadDecks(string json) =>
         JsonSerializer.Deserialize<List<Deck>>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;

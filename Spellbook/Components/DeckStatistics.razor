@@ -77,7 +77,19 @@
             error = "Use a mana value from 0 to 1000 and colors WUBRG, C alone, or leave them blank.";
             return;
         }
-        selectedCard!.Details = new CardDetails { ManaValue = manaValue, TypeLine = typeLine?.Trim(), Colors = normalized, RolesReviewed = rolesReviewed, Draw = draw, Ramp = ramp, Removal = removal };
+        var existingDetails = selectedCard!.Details;
+        selectedCard.Details = new CardDetails
+        {
+            ManaValue = manaValue,
+            TypeLine = typeLine?.Trim(),
+            Colors = normalized,
+            ManaCost = existingDetails?.ManaCost,
+            ImageUrl = existingDetails?.ImageUrl,
+            RolesReviewed = rolesReviewed,
+            Draw = draw,
+            Ramp = ramp,
+            Removal = removal
+        };
         error = null;
         analysis = DeckAnalysis.Calculate(Deck);
         await OnChanged.InvokeAsync();

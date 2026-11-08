@@ -416,6 +416,7 @@ else
     private async Task SaveCardName(DeckCard card)
     {
         if (selected is null || renameBusy || editingCard != card) return;
+        var targetDeck = selected;
         var name = editCardName.Trim();
         if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || name.Any(char.IsControl))
         {
@@ -427,7 +428,7 @@ else
             CancelCardNameEdit();
             return;
         }
-        if (selected.Cards.Any(other => other != card &&
+        if (targetDeck.Cards.Any(other => other != card &&
             string.Equals(other.Section.Trim(), card.Section.Trim(), StringComparison.OrdinalIgnoreCase) &&
             string.Equals(other.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)))
         {
@@ -442,6 +443,18 @@ else
             if (verified is null)
             {
                 message = "No exact Scryfall card match. The saved name was not changed.";
+                return;
+            }
+            if (!ReferenceEquals(selected, targetDeck) || !targetDeck.Cards.Contains(card))
+            {
+                message = "The selected deck changed during lookup. The saved name was not changed.";
+                return;
+            }
+            if (targetDeck.Cards.Any(other => other != card &&
+                string.Equals(other.Section.Trim(), card.Section.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(other.Name.Trim(), verified.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                message = "A card with that name already exists in this section. Adjust its quantity instead.";
                 return;
             }
             card.Name = verified.Name;
@@ -465,7 +478,7 @@ else
         details.TypeLine = result.TypeLine;
         details.ManaCost = result.ManaCost;
         details.ImageUrl = IsScryfallImageUrl(result.ImageUrl) ? result.ImageUrl : null;
-        if (result.Colors.Length > 0) details.Colors = string.Concat(result.Colors);
+        details.Colors = result.Colors.Length > 0 ? string.Concat(result.Colors) : "C";
         return details;
     }
 
