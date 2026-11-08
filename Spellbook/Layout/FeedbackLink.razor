@@ -1,32 +1,79 @@
+@inject IJSRuntime JS
+
 <section class="feedback-section" aria-label="Feedback">
-    <a class="feedback-link" href="@FeedbackUrl" target="_blank" rel="noopener noreferrer"
-       aria-describedby="feedback-notice" aria-label="Send feedback on GitHub (opens in a new tab)">Send feedback ↗</a>
-    <p id="feedback-notice" class="feedback-notice">Opens GitHub in a new tab. GitHub sign-in is required to submit; issues are public. No deck data or device details are included automatically. Review your message before submitting.</p>
+    <button type="button" class="feedback-link" @onclick="Open">Send feedback</button>
+    <p class="feedback-notice">Share bugs and suggestions without leaving Spellbook. Submitted issues are public; review your text and do not include private deck or account information.</p>
+    <dialog class="feedback-dialog" @ref="dialog">
+        <h2>Send feedback</h2>
+        <p>This creates a public issue in Jamula/Spellbook. No decks, photos, browser storage, or device details are included automatically.</p>
+        <label for="feedback-kind">Feedback type</label>
+        <select id="feedback-kind" @bind="kind">
+            <option>Bug</option>
+            <option>Feature</option>
+            <option>General</option>
+        </select>
+        <label for="feedback-subject">Title</label>
+        <input id="feedback-subject" maxlength="120" @bind="subject" @bind:event="oninput" />
+        <label for="feedback-details">Description and reproduction steps</label>
+        <textarea id="feedback-details" maxlength="4000" @bind="details" @bind:event="oninput"></textarea>
+        <label class="feedback-consent"><input type="checkbox" @bind="approved" /> I have reviewed this text and understand that the GitHub issue will be public.</label>
+        @if (!string.IsNullOrEmpty(status)) { <p role="status">@status</p> }
+        @if (!string.IsNullOrEmpty(issueUrl)) { <p><a href="@issueUrl" target="_blank" rel="noopener noreferrer">View created GitHub issue</a></p> }
+        @if (status.Contains("not configured yet", StringComparison.Ordinal))
+        {
+            <p><a href="https://github.com/Jamula/Spellbook/issues/new" target="_blank" rel="noopener noreferrer">Use GitHub directly until in-app submission is available</a></p>
+        }
+        <div class="feedback-actions">
+            <button type="button" class="secondary" @onclick="Close">Cancel</button>
+            <button type="button" disabled="@sending" @onclick="Send">@(sending ? "Submitting…" : "Submit feedback")</button>
+        </div>
+        <div class="feedback-turnstile" aria-label="Spam prevention verification"></div>
+    </dialog>
 </section>
 
 @code {
-    private static readonly string FeedbackUrl =
-        "https://github.com/Jamula/Spellbook/issues/new?title=" + Uri.EscapeDataString("[Feedback] Describe your request or bug") +
-        "&body=" + Uri.EscapeDataString("""
-            ## What happened or what would you like?
-            
-            Describe the bug or feature request here.
-            
-            ## Steps to reproduce (for bugs)
-            
-            1. 
-            2. 
-            3. 
-            
-            ## Expected result
-            
-            ## Actual result
-            
-            ## Environment (optional — fill in manually)
-            
-            - Browser and version:
-            - Device / operating system:
-            
-            This issue will be public. Do not include passwords, tokens, personal information, or private deck data. Nothing from your decks or browser storage has been attached automatically.
-            """);
+    private ElementReference dialog;
+    private string kind = "Bug";
+    private string subject = "";
+    private string details = "";
+    private bool approved;
+    private bool sending;
+    private string status = "";
+    private string? issueUrl;
+
+    private async Task Open()
+    {
+        status = "";
+        if (!await JS.InvokeAsync<bool>("spellbookFeedback.open", dialog))
+            status = "Feedback submission is not configured yet. Please try again later.";
+    }
+    private Task Close() => JS.InvokeVoidAsync("spellbookFeedback.close", dialog).AsTask();
+
+    private async Task Send()
+    {
+        if (sending) return;
+        issueUrl = null;
+        if (!approved || subject.Trim().Length is < 3 or > 120 || details.Trim().Length is < 10 or > 4000)
+        {
+            status = "Enter a title (3–120 characters), description (10–4000 characters), and confirm public visibility.";
+            return;
+        }
+        sending = true;
+        status = "Submitting your feedback…";
+        try
+        {
+            var result = await JS.InvokeAsync<string>("spellbookFeedback.submit", kind, subject.Trim(), details.Trim());
+            if (!Uri.TryCreate(result, UriKind.Absolute, out var uri) ||
+                uri.Scheme != Uri.UriSchemeHttps || uri.Host != "github.com" ||
+                !uri.AbsolutePath.StartsWith("/Jamula/Spellbook/issues/", StringComparison.Ordinal))
+                throw new JSException("Invalid issue result");
+            issueUrl = result;
+            status = "Your feedback was submitted. The GitHub issue is ready to view.";
+        }
+        catch (JSException)
+        {
+            status = "Feedback could not be submitted. Your text is still here; please try again.";
+        }
+        finally { sending = false; }
+    }
 }

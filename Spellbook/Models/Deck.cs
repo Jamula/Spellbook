@@ -15,4 +15,5 @@ public sealed class DeckCard
     public string Name { get; set; } = "";
     public int Quantity { get; set; } = 1;
     public string Section { get; set; } = "Main";
+    public CardDetails? Details { get; set; }
 }
