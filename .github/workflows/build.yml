@@ -1,14 +1,22 @@
 name: Build Spellbook
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# One active validation per PR/ref; an updated commit supersedes older work.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out source
@@ -16,28 +24,64 @@ jobs:
       - name: Install .NET 10
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: Spellbook/packages.lock.json
       - name: Restore
-        run: dotnet restore Spellbook/Spellbook.csproj
+        run: dotnet restore Spellbook/Spellbook.csproj --locked-mode
+      - name: Verify main-CI recovery contracts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_reconcile.py' -v
       - name: Build
-        run: dotnet build Spellbook/Spellbook.csproj --configuration Release --no-restore
+        run: dotnet build Spellbook/Spellbook.csproj --configuration Release --no-restore --warnaserror
       - name: Publish static site
-        run: dotnet publish Spellbook/Spellbook.csproj --configuration Release --no-restore --output publish
+        run: dotnet publish Spellbook/Spellbook.csproj --configuration Release --no-build --no-restore --output publish
       - name: Check deployable site exists
         run: |
           test -s publish/wwwroot/index.html
           test -d publish/wwwroot/_framework
           test -s publish/wwwroot/_framework/blazor.webassembly.js
           test -n "$(find publish/wwwroot/_framework -maxdepth 1 -type f -print -quit)"
+          test -s publish/wwwroot/manifest.webmanifest
+          test -s publish/wwwroot/icons/spellbook.svg
+          test -s publish/wwwroot/icons/spellbook-192.png
+          test -s publish/wwwroot/icons/spellbook-512.png
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("publish/wwwroot/manifest.webmanifest").read_text())
+          assert manifest["display"] == "standalone"
+          assert manifest["start_url"] == "/" and manifest["scope"] == "/"
+          assert manifest["icons"] and all(
+              Path("publish/wwwroot", icon["src"].lstrip("/")).is_file()
+              for icon in manifest["icons"]
+          )
+          index = Path("publish/wwwroot/index.html").read_text()
+          assert 'rel="manifest"' in index
+          assert 'apple-mobile-web-app-title' in index
+          assert 'rel="apple-touch-icon"' in index
+          assert any(i['sizes'] == '192x192' for i in manifest['icons'])
+          assert any(i['sizes'] == '512x512' for i in manifest['icons'])
+          PY
       - name: Upload static site
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: spellbook-site
           path: publish/wwwroot
           if-no-files-found: error
+          retention-days: 14
+      - name: Install iPhone WebKit smoke test browser
+        run: |
+          npm install --prefix tests/browser --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
+          ./tests/browser/node_modules/.bin/playwright install --with-deps webkit
+      - name: Run iPhone WebKit smoke against published static output
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory publish/wwwroot >/tmp/spellbook-http.log 2>&1 &
+          node --test tests/browser/webkit-smoke.test.mjs
+
 
   coverage:
     name: Test coverage
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -52,23 +96,40 @@ jobs:
       - name: Install .NET 10
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            Spellbook/packages.lock.json
+            Spellbook.Tests/packages.lock.json
+      - name: Restore tests and application
+        run: dotnet restore Spellbook.Tests/Spellbook.Tests.csproj --locked-mode
+      - name: Test Cloudflare feedback security boundary
+        run: node --test tests/feedback-worker.test.mjs
       - name: Test with Cobertura coverage
+        id: tests
         run: >-
-          dotnet test Spellbook.Tests/Spellbook.Tests.csproj --configuration Release
+          dotnet test Spellbook.Tests/Spellbook.Tests.csproj --configuration Release --no-restore
           --collect:"XPlat Code Coverage" --settings coverage.runsettings
-          --results-directory coverage
-      - name: Check application coverage is at least 80%
+          --results-directory coverage --logger "trx;LogFileName=tests.trx"
+          --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type none
+      - name: Summarize test results and verify tests executed
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        run: python3 .github/scripts/check-test-results.py coverage/tests.trx
+      - name: Check application coverage is at least 97%
         run: |
           cp coverage/*/coverage.cobertura.xml coverage.cobertura.xml
           python3 .github/scripts/check-coverage.py coverage.cobertura.xml
-      - name: Save coverage report
-        if: ${{ !cancelled() && hashFiles('coverage.cobertura.xml') != '' }}
+      - name: Save test and coverage diagnostics
+        if: ${{ !cancelled() && hashFiles('coverage/**/*.trx', 'coverage/**/coverage.cobertura.xml', 'coverage.cobertura.xml') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: spellbook-coverage
-          path: coverage.cobertura.xml
+          path: |
+            coverage.cobertura.xml
+            coverage/**/*.trx
+            coverage/**/coverage.cobertura.xml
           if-no-files-found: error
+          retention-days: 14
       - name: Upload coverage to GitHub
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1

@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
     <Using Include="Xunit" />
     <ProjectReference Include="../Spellbook/Spellbook.csproj" />
   </ItemGroup>
