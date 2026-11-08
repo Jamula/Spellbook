@@ -1,0 +1,31 @@
+@inject IJSRuntime JS
+
+<details class="privacy-controls" data-clarity-mask="true">
+    <summary>Privacy and analytics</summary>
+    <p>Spellbook does not load Google Analytics or Microsoft Clarity in this release. No usage events or session recordings are sent to these services.</p>
+    <p>Optional Google Analytics would count basic actions without deck names, card contents, identifiers, uploads or feedback text. Optional Microsoft Clarity would record interactions only after private content masking has been independently verified. These services receive network information such as your IP address when contacted.</p>
+    <p>Both services require separate, explicit consent before loading. A future launch will show an updated notice and ask again. Refusing analytics does not affect your decks or other app features.</p>
+    <label><input type="checkbox" disabled /> Allow Google Analytics usage counts (unavailable)</label>
+    <label><input type="checkbox" disabled /> Allow Microsoft Clarity recordings (unavailable)</label>
+    <button type="button" @onclick="Reject">Reject optional analytics / revoke consent</button>
+    <p role="status">@status</p>
+    <p>Your privacy choice is saved only in this browser. Clearing browser storage removes it. Decks remain on this device until you export them; browser storage does not sync across devices.</p>
+</details>
+
+@code {
+    private string status = "Optional analytics are off.";
+
+    private async Task Reject()
+    {
+        try
+        {
+            var saved = await JS.InvokeAsync<bool>("spellbookPrivacy.revoke");
+            status = saved ? "Optional analytics are off. Your choice was saved in this browser."
+                : "Optional analytics are off. This browser could not save your choice.";
+        }
+        catch (JSException)
+        {
+            status = "Optional analytics are off. Privacy storage is unavailable.";
+        }
+    }
+}

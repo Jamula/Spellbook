@@ -81,6 +81,15 @@ public sealed class DeckStore(IJSRuntime js)
                 if (string.IsNullOrWhiteSpace(card.Section) || card.Section.Length > 80)
                     throw new InvalidDataException("Every card entry needs a valid section.");
 
+                if (card.Details is { } details)
+                {
+                    var colors = details.Colors?.Trim().ToUpperInvariant();
+                    if (details.ManaValue is double mana && (!double.IsFinite(mana) || mana < 0 || mana > 1000) ||
+                        details.TypeLine?.Length > 500 || details.Colors?.Length > 5 ||
+                        (!string.IsNullOrEmpty(colors) && (colors.Any(c => !"WUBRGC".Contains(c)) || (colors.Contains('C') && colors.Length != 1))))
+                        throw new InvalidDataException("Card details contain an invalid mana value, type line, or color code.");
+                }
+
                 // A repeated name in the same section is ambiguous for the quantity editor.
                 if (!seen.Add(card.Section.Trim() + "\u001f" + card.Name.Trim()))
                     throw new InvalidDataException("Duplicate card entries were found in a deck.");

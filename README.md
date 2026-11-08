@@ -74,3 +74,23 @@ Quantities must be 1–250; duplicate names in the same zone are combined only w
 **Export deck TXT/CSV** downloads the selected deck in normalized common interchange syntax. Select a matching text or CSV import option at the destination and review it there; site-specific custom CSV schemas may need column mapping. Quantities and supported zones round-trip through Spellbook. Card printings, foil choices, prices, custom tags/categories, and deck metadata are not included. Custom zones or unsafe names are rejected on deck-list export; use **Export JSON** for lossless Spellbook collection backups.
 
 The small representative examples in [`samples/decklists`](samples/decklists) cover Moxfield-style text, Archidekt-style text, and Archidekt-style CSV. They are illustrative exports, not downloads from a user's account. Automated tests import each example and round-trip every card's name, quantity, and zone through both output formats.
+
+## Deck statistics and local card details
+
+Deck statistics run locally and recompute when you edit the selected deck. Open
+**Review local card details** to enter printed mana values, type lines and card
+colors (`WUBRG`, or `C` for colorless), and explicitly review draw/ramp/removal
+roles. Counts are weighted by quantity and include only the `Main` section;
+other sections are reported separately. Multicolor cards contribute to every
+listed color. The curve excludes known lands and groups mana values of 7 or
+more; fractional values round down. A blank detail is unknown, not zero. Split/multiface type lines remain
+unknown because a single combined type line cannot establish which face is played. Role
+counts are user-confirmed labels, can overlap, and do not prove a card's rules
+behavior. Advice explains its basis and is for playtesting, not legality rulings.
+
+Optional card details survive local storage and JSON export/import. Legacy
+backups still load; malformed detail values are rejected through the existing
+backup-recovery flow without overwriting saved data. This feature makes no
+network calls. A future confirmed Scryfall lookup can prefill
+`DeckCard.Details.ManaValue` and `TypeLine` from its existing `ScryfallCard`
+contract; colors and roles must stay unknown until supported or reviewed.
