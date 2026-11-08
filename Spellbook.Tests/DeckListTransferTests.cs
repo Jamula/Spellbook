@@ -18,7 +18,9 @@ public sealed class DeckListTransferTests
     {
         using var context = new BunitContext();
         context.Services.AddScoped<DeckStore>();
-        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true).SetResult(null);
+        var existing = new Deck { Name = "Existing" };
+        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true)
+            .SetResult(JsonSerializer.Serialize(new[] { existing }));
         context.JSInterop.SetupVoid("spellbookStorage.set", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("spellbookStorage.download", _ => true).SetVoidResult();
         var page = context.Render<Home>();
@@ -33,9 +35,11 @@ public sealed class DeckListTransferTests
         Button(transfer, "Import reviewed deck").Click();
         var savedJson = Assert.IsType<string>(context.JSInterop.Invocations["spellbookStorage.set"].Last().Arguments[1]);
         var saved = JsonSerializer.Deserialize<List<Deck>>(savedJson, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-        Assert.Equal("From Moxfield", Assert.Single(saved).Name);
-        Assert.Equal(5, saved[0].CardCount);
-        Assert.Contains(saved[0].Cards, c => c.Section == "Sideboard");
+        Assert.Equal(2, saved.Count);
+        Assert.Equal("Existing", saved[0].Name);
+        Assert.Equal("From Moxfield", saved[1].Name);
+        Assert.Equal(5, saved[1].CardCount);
+        Assert.Contains(saved[1].Cards, c => c.Section == "Sideboard");
         page.Find("[aria-label='Increase quantity for Lightning Bolt (Sideboard)']").Click();
         page.Find("[aria-label='Card name']").Change("Lightning Bolt");
         page.FindAll("button").Single(b => b.TextContent == "Add").Click();

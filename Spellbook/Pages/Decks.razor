@@ -8,6 +8,7 @@
 else if (loadFailed)
 {
     <p role="alert"><strong>Saved decks could not be loaded.</strong> @error No edits were saved.</p>
+    @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
     <p>Download the raw data first. Restoring a backup replaces unreadable browser data.</p>
     <button @onclick="ExportDamaged">Download raw saved data</button>
     <label><input type="checkbox" @bind="confirmRecovery" /> I understand the restore will replace unreadable saved data.</label>

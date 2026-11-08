@@ -14,22 +14,14 @@ namespace Spellbook.Tests;
 public sealed class DeckEditorTests
 {
     [Fact]
-    public void EditDecksAndCardsThroughTheRenderedInterface()
+    public void EditDeckAndCardsThroughTheRenderedInterface()
     {
         using var context = CreateContext();
         var layout = context.Render<MainLayout>(parameters => parameters.Add(p => p.Body,
             (RenderFragment)(builder => { builder.OpenComponent<Home>(0); builder.CloseComponent(); })));
         var page = layout.FindComponent<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
         Assert.Contains("Your decks stay in this browser", layout.Markup);
-
-        // Empty names are ignored; surrounding whitespace is trimmed.
-        page.Find("[aria-label='New deck name']").Change("   ");
-        Button(page, "Create deck").Click();
-        Assert.Empty(page.FindAll(".deck-choice"));
-        page.Find("[aria-label='New deck name']").Change("  Burn  ");
-        Button(page, "Create deck").Click();
-        Assert.Equal("Burn", page.Find("h2").TextContent);
 
         page.Find(".editor label input").Change("Modern burn");
         page.Find("select").Change("Modern");
@@ -66,15 +58,9 @@ public sealed class DeckEditorTests
         page.Find("[aria-label='Remove Lightning Bolt']").Click();
         Assert.Equal(0, SavedDecks(context)[0].CardCount);
 
-        page.Find("[aria-label='New deck name']").Change("Second deck");
-        Button(page, "Create deck").Click();
-        page.FindAll(".deck-choice")[0].Click();
-        Assert.Equal("Modern burn", page.Find("h2").TextContent);
-        Button(page, "Delete deck").Click();
-        Assert.Equal("Second deck", page.Find("h2").TextContent);
         Button(page, "Delete deck").Click();
         Assert.Empty(SavedDecks(context));
-        Assert.Contains("No decks yet", page.Markup);
+        Assert.Equal("/", new Uri(context.Services.GetRequiredService<NavigationManager>().Uri).AbsolutePath);
     }
 
     [Fact]
@@ -82,20 +68,19 @@ public sealed class DeckEditorTests
     {
         var existing = new Deck { Name = "Existing", Cards = [new DeckCard { Name = "Forest", Quantity = 3 }] };
         using var context = CreateContext(JsonSerializer.Serialize(new[] { existing }));
-        var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Equal("Existing", page.Find("h2").TextContent));
-        Assert.Contains("Deck · 3 cards", page.Markup);
+        var page = context.Render<Decks>();
+        page.WaitForAssertion(() => Assert.Contains("Existing", page.Markup));
 
-        var importer = page.FindComponents<InputFile>()[0];
+        var importer = page.FindComponent<InputFile>();
         importer.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
         Assert.Contains("Import failed:", page.Find("[role='status']").TextContent);
-        Assert.Single(page.FindAll(".deck-choice"));
+        Assert.Single(page.FindAll(".deck-tile"));
         importer.UploadFiles(InputFileContent.CreateFromText(new string('x', 2_000_001), "large.json"));
         Assert.Contains("Import must be smaller than 2 MB", page.Find("[role='status']").TextContent);
 
         var imported = new Deck { Name = "Imported", Cards = [new DeckCard { Name = "Island", Quantity = 2 }] };
         importer.UploadFiles(InputFileContent.CreateFromText(JsonSerializer.Serialize(new[] { imported }), "decks.json"));
-        page.WaitForAssertion(() => Assert.Equal("Imported", page.Find("h2").TextContent));
+        page.WaitForAssertion(() => Assert.Contains("Imported", page.Markup));
         Assert.Contains("Imported 1 deck(s).", page.Markup);
         var saved = SavedDecks(context);
         Assert.Equal(2, saved.Count);
@@ -103,22 +88,11 @@ public sealed class DeckEditorTests
         Assert.NotEqual(imported.Id, saved[1].Id);
         Assert.Equal(2, saved[1].CardCount);
 
-        // Empty imports leave the selection and saved decks intact.
         importer.UploadFiles(InputFileContent.CreateFromText("[]", "empty.json"));
         Assert.Contains("Imported 0 deck(s).", page.Markup);
-        Assert.Equal("Imported", page.Find("h2").TextContent);
         Assert.Equal(2, SavedDecks(context).Count);
 
-        page.FindComponents<InputFile>()[1].UploadFiles(
-            InputFileContent.CreateFromBinary([1, 2], "sample.jpg", contentType: "image/jpeg"),
-            InputFileContent.CreateFromBinary([3, 4], "sample.mov", contentType: "video/quicktime"));
-        Assert.Contains("Selected: sample.jpg, sample.mov", page.Markup);
-        page.FindAll(".deck-choice")[0].Click();
-        Assert.Equal("Existing", page.Find("h2").TextContent);
-        Assert.DoesNotContain("Selected:", page.Markup);
-        Assert.DoesNotContain("Imported 0 deck(s).", page.Markup);
-
-        Button(page, "Export JSON").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Export JSON").Click();
         var download = Assert.Single(context.JSInterop.Invocations["spellbookStorage.download"]);
         Assert.Equal("spellbook-decks.json", download.Arguments[0]);
         var exported = ReadDecks(Assert.IsType<string>(download.Arguments[1]));
@@ -149,7 +123,7 @@ public sealed class DeckEditorTests
         Assert.Contains("Review: Imported deck", transfer.Markup);
         Assert.False(transfer.FindAll("button").Single(button => button.TextContent == "Import reviewed deck").HasAttribute("disabled"));
         Assert.Equal("Existing", page.Find("h2").TextContent);
-        Assert.Single(page.FindAll(".deck-choice"));
+        Assert.Single(page.FindAll(".editor"));
         var attemptedSave = JsonSerializer.Deserialize<List<Deck>>(
             Assert.IsType<string>(Assert.Single(context.JSInterop.Invocations["spellbookStorage.set"]).Arguments[1]),
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
@@ -189,11 +163,9 @@ public sealed class DeckEditorTests
     {
         using var context = CreateContext();
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Photo deck");
-        Button(page, "Create deck").Click();
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
 
-        var media = page.FindComponents<InputFile>()[1];
+        var media = page.FindComponents<InputFile>()[0];
         media.UploadFiles(InputFileContent.CreateFromBinary([1, 2, 3, 4], "card.jpg", contentType: "image/jpeg"));
 
         Assert.Contains("Selected: card.jpg", page.Markup);
@@ -217,10 +189,8 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<string>("spellbookMedia.recognize", _ => true)
             .SetResult("Lightning Bolt\nInstant\nDeal 3 damage");
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("OCR deck");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1, 2], "bolt.png", contentType: "image/png"));
         Button(page, "Recognize text on device").Click();
         page.WaitForAssertion(() => Assert.Equal("Lightning Bolt", page.Find("[aria-label='Name from photo']").GetAttribute("value")));
@@ -249,10 +219,8 @@ public sealed class DeckEditorTests
         context.JSInterop.SetupVoid("spellbookMedia.releaseVideo", _ => true).SetVoidResult();
 
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Mobile media deck");
-        Button(page, "Create deck").Click();
-        var media = page.FindComponents<InputFile>()[1];
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        var media = page.FindComponents<InputFile>()[0];
 
         media.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
         page.WaitForAssertion(() => Assert.Equal("blob:local-video",
@@ -278,10 +246,8 @@ public sealed class DeckEditorTests
     {
         using var context = CreateContext();
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Media deck");
-        Button(page, "Create deck").Click();
-        var media = page.FindComponents<InputFile>()[1];
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        var media = page.FindComponents<InputFile>()[0];
 
         media.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "unsupported.xyz", contentType: "application/octet-stream"));
         Assert.Contains("Select a JPEG, PNG", page.Markup);
@@ -313,10 +279,8 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<string>("spellbookMedia.convertHeic", _ => true).SetResult("not-jpeg");
         context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("not-blob");
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Media failures");
-        Button(page, "Create deck").Click();
-        var picker = page.FindComponents<InputFile>()[1];
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        var picker = page.FindComponents<InputFile>()[0];
 
         picker.UploadFiles(InputFileContent.CreateFromBinary([1, 2], "card.heic", contentType: "image/heic"));
         page.WaitForAssertion(() => Assert.Contains("Media could not be processed locally", page.Markup));
@@ -335,10 +299,8 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("blob:review");
         context.JSInterop.Setup<string>("spellbookMedia.captureFrame", _ => true).SetResult("not-jpeg");
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Frame retry");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1, 2], "movie.mov", contentType: "video/quicktime"));
         page.WaitForAssertion(() => Assert.Single(page.FindAll("#card-video-preview")));
         Button(page, "Capture selected video frame").Click();
@@ -353,10 +315,8 @@ public sealed class DeckEditorTests
         using var context = CreateContext();
         context.JSInterop.Setup<string>("spellbookMedia.recognize", _ => true).SetResult("\n ");
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Manual correction");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1], "blur.jpg", contentType: "image/jpeg"));
         Button(page, "Recognize text on device").Click();
         page.WaitForAssertion(() => Assert.Contains("Enter the card name yourself", page.Markup));
@@ -371,30 +331,14 @@ public sealed class DeckEditorTests
     {
         using var context = CreateContext();
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Initial");
-        Button(page, "Create deck").Click();
-        var picker = page.FindComponents<InputFile>()[1];
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        var picker = page.FindComponents<InputFile>()[0];
         picker.UploadFiles(InputFileContent.CreateFromBinary([1], "initial.jpg", contentType: "image/jpeg"));
         Assert.Single(page.FindAll(".scan-preview"));
 
-        page.Find("[aria-label='New deck name']").Change("Next deck");
-        Button(page, "Create deck").Click();
-        Assert.Empty(page.FindAll(".scan-preview"));
-
-        picker.UploadFiles(InputFileContent.CreateFromBinary([2], "next.jpg", contentType: "image/jpeg"));
-        Assert.Single(page.FindAll(".scan-preview"));
         Button(page, "Delete deck").Click();
         Assert.Empty(page.FindAll(".scan-preview"));
-        Assert.Equal("Initial", page.Find("h2").TextContent);
-
-        picker.UploadFiles(InputFileContent.CreateFromBinary([3], "third.jpg", contentType: "image/jpeg"));
-        Assert.Single(page.FindAll(".scan-preview"));
-        var imported = new Deck { Name = "Imported deck" };
-        page.FindComponents<InputFile>()[0].UploadFiles(
-            InputFileContent.CreateFromText(JsonSerializer.Serialize(new[] { imported }), "new.json"));
-        Assert.Empty(page.FindAll(".scan-preview"));
-        Assert.Equal("Imported deck", page.Find("h2").TextContent);
+        Assert.Empty(SavedDecks(context));
     }
 
     [Fact]
@@ -404,9 +348,7 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
             .SetResult(["Lightning Bolt", "Lightning Helix"]);
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Scryfall deck");
-        Button(page, "Create deck").Click();
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
 
         await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Input("Lightn"));
         page.WaitForAssertion(() => Assert.Contains("Lightning Bolt", page.Find(".card-suggestions").TextContent),
@@ -430,9 +372,7 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
             .SetException(new Microsoft.JSInterop.JSException("Network unavailable"));
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Offline lookup");
-        Button(page, "Create deck").Click();
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
         page.Find("[aria-label='Card name']").Input("Lightning");
         page.WaitForAssertion(() => Assert.Contains("Scryfall is unavailable", page.Markup),
             timeout: TimeSpan.FromSeconds(4));
@@ -450,10 +390,8 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<string>("spellbookMedia.recognize", _ => true)
             .SetException(new Microsoft.JSInterop.JSException("OCR worker failed"));
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Fallback");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1, 2], "ocr-failure.jpg", contentType: "image/jpeg"));
         Button(page, "Recognize text on device").Click();
         page.WaitForAssertion(() => Assert.Contains("On-device OCR is unavailable", page.Markup));
@@ -470,10 +408,8 @@ public sealed class DeckEditorTests
         using var context = CreateContext();
         context.JSInterop.Mode = JSRuntimeMode.Loose;
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Verify manually");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1, 2], "unknown-card.jpg", contentType: "image/jpeg"));
         page.Find("[aria-label='Name from photo']").Change("Not a known MTG card");
         Button(page, "Verify against Scryfall").Click();
@@ -488,9 +424,8 @@ public sealed class DeckEditorTests
     {
         using var context = CreateContext();
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Original");
-        Button(page, "Create deck").Click();
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.Find(".editor label input").Change("Original");
         page.Find(".editor label input").Change(" ");
         Assert.Contains("previous name was restored", page.Markup);
         Assert.Equal("Original", Assert.Single(SavedDecks(context)).Name);
@@ -515,10 +450,8 @@ public sealed class DeckEditorTests
                 ImageUrl = "https://cards.scryfall.io/normal/front/a/v/avacyn-reference.jpg"
             });
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Avacyn test deck");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1, 2], "avacyn.jpg", contentType: "image/jpeg"));
         page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
         Button(page, "Verify against Scryfall").Click();
@@ -539,10 +472,8 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
             .SetException(new Microsoft.JSInterop.JSException("Scryfall offline"));
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Offline scan");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1], "offline.jpg", contentType: "image/jpeg"));
         page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
         Button(page, "Verify against Scryfall").Click();
@@ -560,10 +491,8 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
             .SetResult(new ScryfallCard { Name = "Avacyn, Angel of Hope", ManaValue = 8 });
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Editable scan");
-        Button(page, "Create deck").Click();
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1], "card.png", contentType: "image/png"));
         page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
         Button(page, "Verify against Scryfall").Click();
@@ -583,9 +512,7 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
             .SetResult([]);
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("No matches");
-        Button(page, "Create deck").Click();
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
         page.Find("[aria-label='Card name']").Input("A");
         Assert.DoesNotContain(context.JSInterop.Invocations,
             i => i.Identifier == "spellbookScryfall.autocomplete");
@@ -609,9 +536,7 @@ public sealed class DeckEditorTests
         context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
             .SetResult(["Avacyn, Angel of Hope"]);
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Chosen by lookup");
-        Button(page, "Create deck").Click();
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
         await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Input("Avacy"));
         page.WaitForAssertion(() => Assert.Contains("Avacyn, Angel of Hope", page.Find(".card-suggestions").TextContent),
             timeout: TimeSpan.FromSeconds(4));
@@ -649,11 +574,9 @@ public sealed class DeckEditorTests
                 ManaValue = 8
             });
         var page = context.Render<Home>();
-        page.WaitForAssertion(() => Assert.Contains("No decks yet", page.Markup));
-        page.Find("[aria-label='New deck name']").Change("Card links");
-        Button(page, "Create deck").Click();
+        page.WaitForAssertion(() => Assert.Contains("Scan a card", page.Markup));
         Assert.Single(page.FindAll("section.card-scan-panel[aria-label='Scan a card']"));
-        page.FindComponents<InputFile>()[1].UploadFiles(
+        page.FindComponents<InputFile>()[0].UploadFiles(
             InputFileContent.CreateFromBinary([1], "card.png", contentType: "image/png"));
         page.Find("[aria-label='Name from photo']").Change("Avacyn, Angel of Hope");
         Button(page, "Verify against Scryfall").Click();
@@ -668,6 +591,7 @@ public sealed class DeckEditorTests
     {
         var context = new BunitContext();
         context.Services.AddScoped<DeckStore>();
+        storedJson ??= JsonSerializer.Serialize(new[] { new Deck { Name = "Test deck" } });
         context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true).SetResult(storedJson);
         context.JSInterop.SetupVoid("spellbookStorage.set", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("spellbookStorage.download", _ => true).SetVoidResult();
@@ -677,8 +601,13 @@ public sealed class DeckEditorTests
     private static AngleSharp.Dom.IElement Button(IRenderedComponent<Home> page, string text) =>
         page.FindAll("button").Single(button => button.TextContent == text);
 
-    private static List<Deck> SavedDecks(BunitContext context) =>
-        ReadDecks(Assert.IsType<string>(context.JSInterop.Invocations["spellbookStorage.set"].Last().Arguments[1]));
+    private static List<Deck> SavedDecks(BunitContext context)
+    {
+        var saves = context.JSInterop.Invocations["spellbookStorage.set"];
+        return saves.Count == 0
+            ? [new Deck { Name = "Test deck" }]
+            : ReadDecks(Assert.IsType<string>(saves.Last().Arguments[1]));
+    }
 
     private static List<Deck> ReadDecks(string json) =>
         JsonSerializer.Deserialize<List<Deck>>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
