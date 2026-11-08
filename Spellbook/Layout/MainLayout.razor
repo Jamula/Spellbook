@@ -1,11 +1,10 @@
 @inherits LayoutComponentBase
 <div class="shell">
-  <header><a href="/">✦ Spellbook</a><span>Magic deck lab · local-first</span></header>
+  <header><a href="/">✦ Spellbook</a><nav aria-label="Main navigation"><NavLink href="/" Match="NavLinkMatch.All">Decks</NavLink><NavLink href="/settings">Settings</NavLink></nav></header>
   <main>@Body</main>
   <footer>
     Prototype · Your decks stay in this browser until exported. No paid APIs.
     <AppVersion />
     <FeedbackLink />
-    <PrivacyControls />
   </footer>
 </div>

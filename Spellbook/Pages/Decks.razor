@@ -1,0 +1,113 @@
+@page "/"
+@inject DeckStore Store
+@inject NavigationManager Navigation
+
+<h1>My decks</h1>
+<p class="muted">Create and manage your decks. Changes stay in this browser.</p>
+@if (!loaded) { <p>Loading decks…</p> }
+else if (loadFailed)
+{
+    <p role="alert"><strong>Saved decks could not be loaded.</strong> @error No edits were saved.</p>
+    <p>Download the raw data first. Restoring a backup replaces unreadable browser data.</p>
+    <button @onclick="ExportDamaged">Download raw saved data</button>
+    <label><input type="checkbox" @bind="confirmRecovery" /> I understand the restore will replace unreadable saved data.</label>
+    <label class="upload">Restore JSON backup <InputFile OnChange="Recover" accept=".json,application/json" disabled="@(!confirmRecovery)" /></label>
+}
+else
+{
+    <div class="toolbar">
+        <label>New deck name <input maxlength="160" @bind="newName" /></label>
+        <button @onclick="CreateDeck">Create deck</button>
+    </div>
+    @if (decks.Count == 0) { <p>No decks yet. Create your first one above.</p> }
+    <section class="deck-grid" aria-label="Your decks">
+        @foreach (var deck in decks)
+        {
+            <article class="deck-tile">
+                <label>Deck name <input aria-label="Deck name for @deck.Name" maxlength="160" value="@deck.Name" @onchange="e => Rename(deck, e)" /></label>
+                <p>@deck.CardCount cards · @deck.Format</p>
+                <button @onclick="() => Edit(deck)">Open deck</button>
+                <button class="danger" @onclick="() => Delete(deck)">Delete</button>
+            </article>
+        }
+    </section>
+    <p role="note"><strong>Back up your decks:</strong> Browser storage does not sync between devices. Export JSON regularly and store it somewhere safe.</p>
+    <div class="toolbar"><button class="secondary" @onclick="Export">Export JSON</button><label class="upload">Import JSON <InputFile OnChange="Import" accept=".json,application/json" /></label></div>
+    @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
+}
+
+@code {
+    private List<Deck> decks = [];
+    private string newName = "";
+    private string message = "";
+    private string? error;
+    private bool loaded;
+    private bool loadFailed;
+    private bool confirmRecovery;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { decks = await Store.LoadAsync(); }
+        catch (InvalidDataException ex) { error = ex.Message; loadFailed = true; }
+        loaded = true;
+        StateHasChanged();
+    }
+    private async Task CreateDeck()
+    {
+        if (string.IsNullOrWhiteSpace(newName) || newName.Trim().Length > 160) { message = "Deck name must be 1–160 characters."; return; }
+        var deck = new Deck { Name = newName.Trim() };
+        decks.Add(deck);
+        try { await Store.SaveAsync(decks); Navigation.NavigateTo($"/deck/{deck.Id}"); }
+        catch (JSException ex) { decks.Remove(deck); message = $"Could not save this deck: {ex.Message}"; }
+    }
+    private void Edit(Deck deck) => Navigation.NavigateTo($"/deck/{deck.Id}");
+    private async Task Rename(Deck deck, ChangeEventArgs e)
+    {
+        var name = e.Value?.ToString()?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 160) { message = "Deck name must be 1–160 characters."; return; }
+        var oldName = deck.Name;
+        deck.Name = name;
+        try { await Store.SaveAsync(decks); message = "Deck name saved."; }
+        catch (JSException ex) { deck.Name = oldName; message = $"Could not rename this deck: {ex.Message}"; }
+    }
+    private async Task Delete(Deck deck)
+    {
+        decks.Remove(deck);
+        try { await Store.SaveAsync(decks); }
+        catch (JSException ex) { decks.Add(deck); message = $"Could not delete this deck: {ex.Message}"; }
+    }
+    private Task Export() => Store.ExportAsync(decks);
+    private Task ExportDamaged() => Store.ExportDamagedAsync();
+    private async Task Recover(InputFileChangeEventArgs e)
+    {
+        if (!confirmRecovery || !loadFailed) return;
+        try
+        {
+            if (e.File.Size > 2_000_000) throw new InvalidDataException("Backup must be smaller than 2 MB.");
+            using var stream = e.File.OpenReadStream(2_000_000);
+            using var reader = new StreamReader(stream);
+            var recovered = Store.ParseImport(await reader.ReadToEndAsync());
+            await Store.SaveAsync(recovered);
+            decks = recovered; loadFailed = false; confirmRecovery = false; error = null;
+            message = $"Restored {recovered.Count} deck(s).";
+        }
+        catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or JSException) { message = $"Recovery failed: {ex.Message}"; }
+    }
+    private async Task Import(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file.Size > 2_000_000) throw new InvalidDataException("Import must be smaller than 2 MB.");
+            using var stream = file.OpenReadStream(2_000_000);
+            using var reader = new StreamReader(stream);
+            var imported = Store.ParseImport(await reader.ReadToEndAsync());
+            foreach (var d in imported) d.Id = Guid.NewGuid();
+            var candidate = decks.Concat(imported).ToList();
+            await Store.SaveAsync(candidate);
+            decks = candidate;
+            message = $"Imported {imported.Count} deck(s).";
+        }
+        catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or JSException) { message = $"Import failed: {ex.Message}"; }
+    }
+}
