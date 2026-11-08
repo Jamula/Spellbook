@@ -6,7 +6,7 @@ The internal consent API accepts separate boolean choices for usage and recordin
 
 ## Remaining launch gates (not implemented or accepted here)
 
-- Resolve prerequisite issues #4, #5, #7, #8, #16 and verify readiness with owner.
+- Prerequisite issues #5, #7, #8 and #16 are complete. Issue #4 moved to Phase 3 and still needs release/iPhone verification; issue #38 remains open for production feedback bindings and end-to-end verification. Analytics remains optional P2 work, not a release blocker.
 - Owner supplies public GA4 Measurement ID and optional Clarity project ID and explicitly approves launch. No IDs are needed for this groundwork. Repository Actions variable *names* could not be listed (403); the attached runtime exposes no configured analytics variable names. No credential values were inspected.
 - Add a reviewed transport implementation and explicit deployment configuration with default off. Do not use a browser flag or a single masking checkbox as authorization. Change the consent notice/storage version and obtain fresh separate opt-in; stored choices from this groundwork must not authorize collection.
 - Independently verify Clarity masking/exclusions for deck lists, editor/card contents, uploads, feedback and screenshot previews **before** loading Clarity for any real user. A mask attribute on this privacy panel is not proof. Review iPhone Safari recordings with owner. If masking is unreliable, omit Clarity entirely.
@@ -17,7 +17,7 @@ Do not close #22 when this preparatory PR lands. Launch and real-device acceptan
 ## Groundwork validation
 
 - Locked application/test restore, Release build and static publish passed. Publish reports the existing optional `wasm-tools` optimization advisory; no workload/dependency changes were made.
-- Full isolated xUnit run: 38 passed, zero failures/skips; application line coverage 250/274 = 91.24%. Four privacy cases cover disclosure, saved/unsaved refusal and blocked JS.
+- The repository C# suite uses MSTest (with bUnit for rendered components), not xUnit. The latest merged Phase 1 run passed 118 tests with 97.11% application line coverage (841/866). Four privacy cases cover disclosure, saved/unsaved refusal and blocked JS.
 - `node --test scripts/privacy.test.cjs`: two broad isolated scenarios exercise strict booleans, every permitted event, unexpected names/payloads, each separate preference combination, stored opt-in, corrupt/blocked storage and revocation with network/DOM APIs absent.
 - Official documentation was reviewed on 2026-11-07 after the documentation hosts became reachable. Google's basic consent mode blocks tags until the visitor interacts and sends no data before consent; advanced mode loads tags before consent and sends cookieless measurements while consent is denied. Clarity's current ConsentV2 API prevents cookies when denied but still permits limited cookieless tracking and per-page identifiers. These sources verify vendor behavior; they do not establish that the owner approves either service or the resulting data transfer.
 - Local script cost: 1,351 uncompressed bytes, no dependencies, timers, observers, automatic event listeners, queues or third-party requests. No JS interop occurs until the user presses refusal/revocation. Browser-level results below do not represent real iPhone Safari or live vendor testing.
