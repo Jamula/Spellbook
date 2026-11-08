@@ -95,7 +95,7 @@ public sealed class DeckEditorTests
 
         restore.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
         TestChecks.Contains("Recovery failed; original saved data was not intentionally replaced", page.Markup);
-        TestChecks.DoesNotContain(context.JSInterop.Invocations, call => call.Identifier == "spellbookStorage.set");
+        TestChecks.DoesNotContain(context.JSInterop.Invocations.Select(call => call.Identifier), "spellbookStorage.set");
 
         var recovered = new Deck { Name = "Recovered", Cards = [new DeckCard { Name = "Island" }] };
         restore.UploadFiles(InputFileContent.CreateFromText(JsonSerializer.Serialize(new[] { recovered }), "backup.json"));
@@ -478,8 +478,8 @@ public sealed class DeckEditorTests
         var page = context.Render<Home>();
         page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
         page.Find("[aria-label='Card name']").Input("A");
-        TestChecks.DoesNotContain(context.JSInterop.Invocations,
-            i => i.Identifier == "spellbookScryfall.autocomplete");
+        TestChecks.DoesNotContain(context.JSInterop.Invocations.Select(i => i.Identifier),
+            "spellbookScryfall.autocomplete");
 
         page.Find("[aria-label='Card name']").Input("Avacy");
         page.WaitForAssertion(() => TestChecks.Contains("No suggestions", page.Markup),

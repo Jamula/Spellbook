@@ -9,6 +9,7 @@ else if (loadFailed)
 {
     <p role="alert"><strong>Saved decks could not be loaded.</strong> @error No edits were saved.</p>
     @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
+    @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
     <p>Download the raw data first. Restoring a backup replaces unreadable browser data.</p>
     <button @onclick="ExportDamaged">Download raw saved data</button>
     <label><input type="checkbox" @bind="confirmRecovery" /> I understand the restore will replace unreadable saved data.</label>
@@ -34,6 +35,7 @@ else
     </section>
     <p role="note"><strong>Back up your decks:</strong> Browser storage does not sync between devices. Export JSON regularly and store it somewhere safe.</p>
     <div class="toolbar"><button class="secondary" @onclick="Export">Export JSON</button><label class="upload">Import JSON <InputFile OnChange="Import" accept=".json,application/json" /></label></div>
+    <Spellbook.Components.DeckListTransfer OnImport="ImportDeckList" />
     @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
 }
 
@@ -110,5 +112,16 @@ else
             message = $"Imported {imported.Count} deck(s).";
         }
         catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or JSException) { message = $"Import failed: {ex.Message}"; }
+    }
+    private async Task ImportDeckList(Deck deck)
+    {
+        var candidate = decks.Append(deck).ToList();
+        try
+        {
+            await Store.SaveAsync(candidate);
+            decks = candidate;
+            Navigation.NavigateTo($"/deck/{deck.Id}");
+        }
+        catch (JSException ex) { message = $"Could not save the imported deck: {ex.Message}"; }
     }
 }

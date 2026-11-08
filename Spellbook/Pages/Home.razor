@@ -96,7 +96,7 @@ else if (selected is not null)
             </section>
     <Spellbook.Components.DeckListTransfer CurrentDeck="selected" OnImport="ImportDeckList" />
 }
-else if (loaded)
+else
 {
     <p role="alert">This deck could not be found.</p><a href="/">Return to all decks</a>
 }
@@ -131,6 +131,7 @@ else if (loaded)
     private string mediaMessage = "";
     private bool mediaBusy;
     private int scanGeneration;
+    private Guid? selectedDeckId;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -138,6 +139,7 @@ else if (loaded)
         {
             decks = await Store.LoadAsync();
             selected = DeckId == Guid.Empty ? decks.FirstOrDefault() : decks.FirstOrDefault(d => d.Id == DeckId);
+            selectedDeckId = selected?.Id;
             lastSavedName = selected?.Name ?? "";
         }
         catch (InvalidDataException ex)
@@ -150,6 +152,13 @@ else if (loaded)
             loaded = true;
             StateHasChanged();
         }
+    }
+    protected override void OnParametersSet()
+    {
+        if (!loaded || selectedDeckId == DeckId) return;
+        selected = decks.FirstOrDefault(d => d.Id == DeckId);
+        selectedDeckId = selected?.Id;
+        lastSavedName = selected?.Name ?? "";
     }
     private async Task DeleteDeck()
     {
@@ -283,6 +292,8 @@ else if (loaded)
         await Store.SaveAsync(importedDecks);
         ClearScan();
         decks = importedDecks; selected = deck; lastSavedName = deck.Name;
+        selectedDeckId = deck.Id;
+        Navigation.NavigateTo($"/deck/{deck.Id}");
     }
     private Task ExportDamaged() => Store.ExportDamagedAsync();
     private async Task RecoverImport(InputFileChangeEventArgs e)
