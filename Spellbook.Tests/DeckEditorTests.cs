@@ -56,10 +56,11 @@ public sealed class DeckEditorTests
     {
         var existing = new Deck { Name = "Existing" };
         using var context = CreateContext(JsonSerializer.Serialize(new[] { existing }));
+        context.JSInterop.Setup<string[]?>("spellbookTheme.load", _ => true).SetResult(null);
         context.JSInterop.SetupVoid("spellbookStorage.set", _ => true)
             .SetException(new JSException("Quota exceeded"));
-        var page = context.Render<Home>();
-        page.WaitForAssertion(() => TestChecks.AreEqual("Existing", page.Find("h2").TextContent));
+        var page = context.Render<Settings>();
+        page.WaitForAssertion(() => TestChecks.Contains("Deck-list import and export", page.Markup));
         var transfer = page.FindComponent<Spellbook.Components.DeckListTransfer>();
         transfer.Find("textarea").Change("1 Island");
         transfer.FindAll("button").Single(button => button.TextContent == "Review deck list").Click();
@@ -70,7 +71,8 @@ public sealed class DeckEditorTests
         TestChecks.Contains("Could not save the imported deck", transfer.Markup);
         TestChecks.Contains("Review: Imported deck", transfer.Markup);
         TestChecks.IsFalse(transfer.FindAll("button").Single(button => button.TextContent == "Import reviewed deck").HasAttribute("disabled"));
-        TestChecks.AreEqual("Existing", page.Find("h2").TextContent);
+        TestChecks.AreEqual("1 Island", transfer.Find("textarea").GetAttribute("value"));
+        TestChecks.AreEqual("Existing", TestChecks.Single(ReadDecks(context.Services.GetRequiredService<InitialDeckStorage>().Json)).Name);
         var attemptedSave = JsonSerializer.Deserialize<List<Deck>>(
             TestChecks.IsType<string>(TestChecks.Single(context.JSInterop.Invocations["spellbookStorage.set"]).Arguments[1]),
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
@@ -78,11 +80,14 @@ public sealed class DeckEditorTests
     }
 
     [TestMethod]
-    public void EmptyCollectionCanImportDeckListAndOpensImportedDeck()
+    public void EmptySettingsCanImportDeckListAndKeepsItInTheLocalCollection()
     {
         using var context = CreateContext("[]");
-        var page = context.Render<Decks>();
-        page.WaitForAssertion(() => TestChecks.Contains("No decks yet", page.Markup));
+        context.JSInterop.Setup<string[]?>("spellbookTheme.load", _ => true).SetResult(null);
+        var page = context.Render<Settings>();
+        page.WaitForAssertion(() => TestChecks.Contains("Deck-list import and export", page.Markup));
+        TestChecks.Contains("<h2 id=\"deck-list-import-heading\">Import</h2>", page.Markup);
+        TestChecks.Single(page.FindAll("section[aria-labelledby='deck-list-import-heading'] .decklist-transfer textarea[aria-label='Deck list']"));
 
         var transfer = page.FindComponent<Spellbook.Components.DeckListTransfer>();
         transfer.Find("textarea").Change("4 Lightning Bolt");
@@ -93,7 +98,7 @@ public sealed class DeckEditorTests
         var imported = TestChecks.Single(SavedDecks(context));
         TestChecks.AreEqual("Imported deck", imported.Name);
         TestChecks.AreEqual(4, TestChecks.Single(imported.Cards).Quantity);
-        TestChecks.Contains($"/deck/{imported.Id}", context.Services.GetRequiredService<NavigationManager>().Uri);
+        TestChecks.Contains("Deck list imported as a new deck.", transfer.Markup);
     }
 
     [TestMethod]
@@ -325,20 +330,159 @@ public sealed class DeckEditorTests
     public void SavedCardTitleCanBeEditedAndInvalidNamesAreRejected()
     {
         using var context = CreateContext();
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
+            .SetResult(new ScryfallCard { Name = "New title", ManaCost = "{1}{U}" });
         var page = context.Render<Home>();
         page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
         page.Find("[aria-label='Card name']").Change("Old title");
         Button(page, "Add").Click();
 
         var row = page.Find(".card-row");
-        row.QuerySelector("input[aria-label='Card title for Old title']")!.Change("  New title  ");
-        TestChecks.Contains("Card title saved", page.Markup);
+        TestChecks.Empty(row.QuerySelectorAll("input[aria-label^='New card name for']"));
+        row.QuerySelector("button[aria-label='Edit card name for Old title']")!.Click();
+        row.QuerySelector("input[aria-label='New card name for Old title']")!.Input("  New title  ");
+        row.QuerySelector("button[aria-label='Save card name for Old title']")!.Click();
+        TestChecks.Contains("Card name verified and saved", page.Markup);
         TestChecks.AreEqual("New title", row.QuerySelector(".visual-card-info a")!.TextContent);
         TestChecks.AreEqual("New title", TestChecks.Single(SavedDecks(context)[0].Cards).Name);
+        TestChecks.AreEqual("{1}{U}", TestChecks.Single(SavedDecks(context)[0].Cards).Details!.ManaCost);
 
-        row.QuerySelector("input[aria-label='Card title for New title']")!.Change("   ");
-        TestChecks.Contains("Enter a card title", page.Markup);
+        row.QuerySelector("button[aria-label='Edit card name for New title']")!.Click();
+        row.QuerySelector("input[aria-label='New card name for New title']")!.Input("   ");
+        row.QuerySelector("button[aria-label='Save card name for New title']")!.Click();
+        TestChecks.Contains("Enter a card name", page.Markup);
         TestChecks.AreEqual("New title", TestChecks.Single(SavedDecks(context)[0].Cards).Name);
+        row.QuerySelector("button[aria-label='Cancel card name edit for New title']")!.Click();
+        TestChecks.Empty(row.QuerySelectorAll("input[aria-label^='New card name for']"));
+    }
+
+    [TestMethod]
+    public void UnverifiableCardNameDoesNotReplaceTheSavedName()
+    {
+        var original = new Deck { Name = "Test deck", Cards = [new DeckCard { Name = "Known card", Quantity = 2 }] };
+        using var context = CreateContext(JsonSerializer.Serialize(new[] { original }));
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true).SetResult(null);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => TestChecks.Contains("Known card", page.Markup));
+
+        var row = page.Find(".card-row");
+        row.QuerySelector("button[aria-label='Edit card name for Known card']")!.Click();
+        row.QuerySelector("input[aria-label='New card name for Known card']")!.Input("Unverifiable card");
+        row.QuerySelector("button[aria-label='Save card name for Known card']")!.Click();
+
+        TestChecks.Contains("No exact Scryfall card match", page.Markup);
+        TestChecks.AreEqual("Known card", TestChecks.Single(SavedDecks(context)[0].Cards).Name);
+        TestChecks.AreEqual(2, TestChecks.Single(SavedDecks(context)[0].Cards).Quantity);
+    }
+
+    [TestMethod]
+    public void CardNameEditorHandlesUnchangedDuplicateAndLookupFailure()
+    {
+        var deck = new Deck
+        {
+            Name = "Test deck",
+            Cards = [new DeckCard { Name = "Known card" }, new DeckCard { Name = "Another card" }]
+        };
+        using var context = CreateContext(JsonSerializer.Serialize(new[] { deck }));
+        context.JSInterop.Setup<ScryfallCard?>("spellbookScryfall.exact", _ => true)
+            .SetException(new JSException("Network unavailable"));
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => TestChecks.Contains("Known card", page.Markup));
+
+        var edit = page.Find("button[aria-label='Edit card name for Known card']");
+        edit.Click();
+        page.Find("input[aria-label='New card name for Known card']").Input("Known card");
+        page.Find("button[aria-label='Save card name for Known card']").Click();
+        TestChecks.Empty(page.FindAll("input[aria-label^='New card name for']"));
+
+        page.Find("button[aria-label='Edit card name for Known card']").Click();
+        page.Find("input[aria-label='New card name for Known card']").Input("Another card");
+        page.Find("button[aria-label='Save card name for Known card']").Click();
+        TestChecks.Contains("already exists in this section", page.Markup);
+        TestChecks.Empty(context.JSInterop.Invocations["spellbookScryfall.exact"]);
+
+        page.Find("input[aria-label='New card name for Known card']").Input("Unverified during outage");
+        page.Find("button[aria-label='Save card name for Known card']").Click();
+        TestChecks.Contains("Scryfall could not verify this name", page.Markup);
+        TestChecks.AreEqual("Known card", ReadDecks(context.Services.GetRequiredService<InitialDeckStorage>().Json)[0].Cards[0].Name);
+    }
+
+    [TestMethod]
+    public void CardSuggestionsSupportKeyboardScrollingAndSaveVisualCardMetadata()
+    {
+        var existingDeck = new Deck { Name = "Test deck", Cards = [new DeckCard { Name = "Island" }] };
+        using var context = CreateContext(JsonSerializer.Serialize(new[] { existingDeck }));
+        var cards = new[]
+        {
+            new ScryfallCard { Name = "Angel of Hope", ManaCost = "{4}{W}{W}", ManaValue = 6, TypeLine = "Creature", Colors = ["W"] },
+            new ScryfallCard { Name = "Baneslayer Angel", ManaCost = "{W}{U}{B}{R}{G}{C}{2}{100000}", ManaValue = 5, TypeLine = "Creature", Colors = ["W"], ImageUrl = "https://cards.scryfall.io/small/front/a/b/angel.jpg" }
+        };
+        context.JSInterop.Setup<ScryfallCard[]>("spellbookScryfall.autocomplete", _ => true).SetResult(cards);
+        context.JSInterop.SetupVoid("spellbookScryfall.scrollSuggestionIntoView", _ => true).SetVoidResult();
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
+
+        var search = page.Find("[aria-label='Card name']");
+        TestChecks.AreEqual("combobox", search.GetAttribute("role"));
+        search.Input("Angel");
+        page.WaitForAssertion(() => TestChecks.AreEqual(2, page.FindAll("[role='option']").Count));
+        TestChecks.AreEqual("card-suggestion-0", search.GetAttribute("aria-activedescendant"));
+        search.KeyDown("ArrowUp");
+        page.WaitForAssertion(() => TestChecks.AreEqual("card-suggestion-0", search.GetAttribute("aria-activedescendant")));
+        search.KeyDown("Escape");
+        TestChecks.Empty(page.FindAll("[role='option']"));
+        TestChecks.AreEqual("false", search.GetAttribute("aria-expanded"));
+        search.Input("Angel");
+        page.WaitForAssertion(() => TestChecks.AreEqual(2, page.FindAll("[role='option']").Count));
+        search.KeyDown("ArrowDown");
+        page.WaitForAssertion(() => TestChecks.AreEqual("card-suggestion-1", search.GetAttribute("aria-activedescendant")));
+        TestChecks.AreEqual("true", page.Find("#card-suggestion-1").GetAttribute("aria-selected"));
+        TestChecks.AreEqual(2, context.JSInterop.Invocations["spellbookScryfall.scrollSuggestionIntoView"].Count);
+
+        search.KeyDown("Enter");
+        TestChecks.AreEqual("Baneslayer Angel", search.GetAttribute("value"));
+        Button(page, "Add").Click();
+        var saved = TestChecks.Single(SavedDecks(context)[0].Cards.Where(card => card.Name == "Baneslayer Angel"));
+        TestChecks.AreEqual("Baneslayer Angel", saved.Name);
+        TestChecks.AreEqual("{W}{U}{B}{R}{G}{C}{2}{100000}", saved.Details!.ManaCost);
+        TestChecks.AreEqual("https://cards.scryfall.io/small/front/a/b/angel.jpg", saved.Details.ImageUrl);
+        TestChecks.AreEqual(5d, saved.Details.ManaValue);
+        TestChecks.AreEqual("Card image for Baneslayer Angel", page.Find(".visual-card-art").GetAttribute("alt"));
+        TestChecks.AreEqual(8, page.FindAll(".mana-symbol").Count);
+        TestChecks.AreEqual("…", page.FindAll(".mana-symbol").Last().TextContent);
+        TestChecks.Single(page.FindAll(".visual-card-fallback"));
+
+        Button(page, "List").Click();
+        TestChecks.Contains("list-mode", page.Find(".card-rows").GetAttribute("class") ?? "");
+        TestChecks.Empty(page.FindAll(".visual-card-art"));
+        Button(page, "Visual").Click();
+        TestChecks.Contains("visual-mode", page.Find(".card-rows").GetAttribute("class") ?? "");
+        TestChecks.AreEqual(2, page.FindAll(".visual-card-art").Count);
+    }
+
+    [TestMethod]
+    public void AddingSuggestedExistingCardMergesItsManaAndImageMetadata()
+    {
+        var deck = new Deck { Name = "Test deck", Cards = [new DeckCard { Name = "Island", Quantity = 2 }] };
+        using var context = CreateContext(JsonSerializer.Serialize(new[] { deck }));
+        context.JSInterop.Setup<ScryfallCard[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult([new ScryfallCard
+            {
+                Name = "Island", ManaCost = "{U}", ManaValue = 0, TypeLine = "Basic Land — Island", Colors = ["U"],
+                ImageUrl = "https://cards.scryfall.io/small/front/i/s/island.jpg"
+            }]);
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
+        var search = page.Find("[aria-label='Card name']");
+        search.Input("Island");
+        page.WaitForAssertion(() => TestChecks.Single(page.FindAll("[role='option']")));
+        search.KeyDown("Enter");
+        Button(page, "Add").Click();
+
+        var saved = TestChecks.Single(SavedDecks(context)[0].Cards);
+        TestChecks.AreEqual(3, saved.Quantity);
+        TestChecks.AreEqual("{U}", saved.Details!.ManaCost);
+        TestChecks.AreEqual("https://cards.scryfall.io/small/front/i/s/island.jpg", saved.Details.ImageUrl);
     }
 
     [TestMethod]
@@ -358,8 +502,8 @@ public sealed class DeckEditorTests
     public async Task ScryfallAutocompleteProvidesSuggestionsAndManualEntryRemainsPossible()
     {
         using var context = CreateContext();
-        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
-            .SetResult(["Lightning Bolt", "Lightning Helix"]);
+        context.JSInterop.Setup<ScryfallCard[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult([new ScryfallCard { Name = "Lightning Bolt" }, new ScryfallCard { Name = "Lightning Helix" }]);
         var page = context.Render<Home>();
         page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
 
@@ -382,7 +526,7 @@ public sealed class DeckEditorTests
     public void ScryfallLookupFailureRetainsManualEntry()
     {
         using var context = CreateContext();
-        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+        context.JSInterop.Setup<ScryfallCard[]>("spellbookScryfall.autocomplete", _ => true)
             .SetException(new Microsoft.JSInterop.JSException("Network unavailable"));
         var page = context.Render<Home>();
         page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
@@ -521,7 +665,7 @@ public sealed class DeckEditorTests
     public void ShortScryfallQueriesAreNotSentAndEmptySearchesKeepManualEntry()
     {
         using var context = CreateContext();
-        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
+        context.JSInterop.Setup<ScryfallCard[]>("spellbookScryfall.autocomplete", _ => true)
             .SetResult([]);
         var page = context.Render<Home>();
         page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
@@ -545,8 +689,8 @@ public sealed class DeckEditorTests
     public async Task ScryfallSuggestionClickChoosesCanonicalName()
     {
         using var context = CreateContext();
-        context.JSInterop.Setup<string[]>("spellbookScryfall.autocomplete", _ => true)
-            .SetResult(["Avacyn, Angel of Hope"]);
+        context.JSInterop.Setup<ScryfallCard[]>("spellbookScryfall.autocomplete", _ => true)
+            .SetResult([new ScryfallCard { Name = "Avacyn, Angel of Hope", ManaCost = "{5}{W}{W}{W}" }]);
         var page = context.Render<Home>();
         page.WaitForAssertion(() => TestChecks.Contains("Add a card", page.Markup));
         await page.InvokeAsync(() => page.Find("[aria-label='Card name']").Input("Avacy"));

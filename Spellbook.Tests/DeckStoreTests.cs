@@ -263,6 +263,39 @@ public sealed class DeckStoreTests
     }
 
     [TestMethod]
+    public void ImportAcceptsScryfallImageMetadataAndRejectsUntrustedImageUrls()
+    {
+        var store = new DeckStore(new StorageRuntime());
+        var deck = new Deck
+        {
+            Cards = [new DeckCard
+            {
+                Name = "Baneslayer Angel",
+                Details = new CardDetails
+                {
+                    ManaValue = 5,
+                    ManaCost = "{3}{W}{W}",
+                    TypeLine = "Creature",
+                    Colors = "W",
+                    ImageUrl = "https://cards.scryfall.io/small/front/a/b/angel.jpg"
+                }
+            }]
+        };
+
+        var importedCard = TestChecks.Single(TestChecks.Single(store.ParseImport(JsonSerializer.Serialize(new[] { deck }))).Cards);
+        TestChecks.AreEqual("{3}{W}{W}", importedCard.Details!.ManaCost);
+        TestChecks.AreEqual("https://cards.scryfall.io/small/front/a/b/angel.jpg", importedCard.Details.ImageUrl);
+
+        deck.Cards[0].Details!.ImageUrl = "https://example.com/card.jpg";
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[] { deck })));
+        deck.Cards[0].Details!.ImageUrl = "http://cards.scryfall.io/card.jpg";
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[] { deck })));
+        deck.Cards[0].Details!.ImageUrl = "https://cards.scryfall.io/card.jpg";
+        deck.Cards[0].Details!.ManaCost = new string('X', 101);
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[] { deck })));
+    }
+
+    [TestMethod]
     public async Task RecoveryDownloadDoesNotOverwriteEmptyOrUnavailableStorage()
     {
         var runtime = new StorageRuntime { StoredJson = null };

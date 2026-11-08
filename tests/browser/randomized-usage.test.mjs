@@ -28,7 +28,22 @@ for (let index = 0; index < iterations; index += 1) {
     const errors = [];
     let step;
     page.on('pageerror', error => errors.push(error.message));
-    await page.route('https://api.scryfall.com/**', route => route.abort());
+    await page.route('https://api.scryfall.com/**', route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/cards/named') {
+        const name = url.searchParams.get('exact') ?? 'Synthetic card';
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            object: 'card', name, cmc: 2, mana_cost: '{1}{U}', type_line: 'Creature',
+            colors: ['U'], image_uris: { small: 'https://cards.scryfall.io/small/front/s/y/synthetic.jpg' },
+            scryfall_uri: 'https://scryfall.com/card/synthetic/reference'
+          })
+        });
+      }
+      return route.abort();
+    });
     try {
       step = 'open deck collection';
       const response = await page.goto(origin, { waitUntil: 'domcontentloaded' });
@@ -45,26 +60,29 @@ for (let index = 0; index < iterations; index += 1) {
 
       step = 'open settings';
       if (rand() < 0.35) {
+        await page.getByRole('button', { name: 'Menu' }).click();
         await page.getByRole('link', { name: 'Settings' }).click();
         await page.getByRole('heading', { name: 'Settings' }).waitFor();
+        await page.getByRole('button', { name: 'Menu' }).click();
         await page.getByRole('link', { name: 'Decks' }).click();
         await page.getByRole('heading', { name: 'My decks' }).waitFor();
         step = 'open deck editor';
-        await page.getByRole('button', { name: 'Open deck' }).click();
+        await page.getByRole('button', { name: /^Open deck/ }).click();
         await page.getByRole('heading', { name: deckName, level: 1 }).waitFor();
       }
 
       step = 'add a card';
-      await page.getByRole('textbox', { name: 'Card name' }).fill(cardName);
+      await page.getByRole('combobox', { name: 'Card name' }).fill(cardName);
       await page.getByRole('button', { name: 'Add', exact: true }).click();
       const cardRow = page.locator('.card-row').filter({ hasText: cardName });
       await cardRow.waitFor();
 
       if (rand() < 0.65) {
         step = 'edit card title';
-        await cardRow.getByRole('textbox', { name: `Card title for ${cardName}` }).fill(`Renamed ${seed}`);
-        await cardRow.getByRole('textbox', { name: `Card title for ${cardName}` }).press('Tab');
-        await page.getByText('Card title saved').waitFor();
+        await cardRow.getByRole('button', { name: `Edit card name for ${cardName}` }).click();
+        await page.getByRole('textbox', { name: `New card name for ${cardName}` }).fill(`Renamed ${seed}`);
+        await page.getByRole('button', { name: `Save card name for ${cardName}` }).click();
+        await page.getByText('Card name verified and saved').waitFor();
         activeCardName = `Renamed ${seed}`;
       }
       if (rand() < 0.75) {
@@ -80,7 +98,7 @@ for (let index = 0; index < iterations; index += 1) {
       await tile.waitFor();
 
       step = 'delete test deck';
-      await tile.getByRole('button', { name: 'Delete' }).click();
+      await tile.getByRole('button', { name: /^Delete deck/ }).click();
       await tile.waitFor({ state: 'detached' });
       assert.deepEqual(errors, []);
     } catch (error) {

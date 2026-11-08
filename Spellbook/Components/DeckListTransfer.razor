@@ -2,8 +2,8 @@
 @using Spellbook.Models
 @using Microsoft.JSInterop
 @inject Microsoft.JSInterop.IJSRuntime JS
-<details>
-    <summary>Import/export a Moxfield or Archidekt deck list</summary>
+<section class="decklist-transfer" aria-labelledby="deck-list-transfer-heading">
+    <h3 id="deck-list-transfer-heading">Deck-list import and export</h3>
     <p>Paste a plain-text or CSV export, or choose a file. Everything stays in this browser. Import creates a new deck; JSON backup remains the full collection backup.</p>
     <p>Card names are checked for valid text only, not against a card database. Review names and zones before saving. Printing details and custom categories are not preserved.</p>
     <label>Imported deck name<input aria-label="Imported deck name" maxlength="160" @bind="deckName" @bind:after="ClearPreview" /></label>
@@ -21,23 +21,32 @@
         <label><input type="checkbox" @bind="confirmed" /> I reviewed the card names, quantities, and zones.</label>
         <button disabled="@(!confirmed)" @onclick="ConfirmImport">Import reviewed deck</button>
     }
-    @if (CurrentDeck is not null)
+    @if (Decks.Count > 0)
     {
-        <p>Export the selected deck as a common text/CSV list for manual import in Moxfield or Archidekt. Check the destination's selected import format.</p>
+        <p>Export a selected deck as a common text/CSV list. Check the destination's selected import format.</p>
+        <label>Deck to export
+            <select aria-label="Deck to export" @bind="selectedDeckIndex">
+                @for (var i = 0; i < Decks.Count; i++)
+                {
+                    <option value="@i">@Decks[i].Name</option>
+                }
+            </select>
+        </label>
         <div class="toolbar">
             <button class="secondary" @onclick="() => Export(false)">Export deck TXT</button>
             <button class="secondary" @onclick="() => Export(true)">Export deck CSV</button>
         </div>
     }
-</details>
+</section>
 @code {
-    [Parameter] public Deck? CurrentDeck { get; set; }
+    [Parameter, EditorRequired] public List<Deck> Decks { get; set; } = [];
     [Parameter] public EventCallback<Deck> OnImport { get; set; }
     private string deckName = "Imported deck";
     private string text = "";
     private string message = "";
     private bool confirmed;
     private DeckListImport? preview;
+    private int selectedDeckIndex;
     private void ClearPreview() { preview = null; confirmed = false; message = ""; }
     private void Preview()
     {
@@ -73,10 +82,11 @@
     }
     private async Task Export(bool csv)
     {
-        if (CurrentDeck is null) return;
+        if (selectedDeckIndex < 0 || selectedDeckIndex >= Decks.Count) return;
         try
         {
-            var content = csv ? DeckListCodec.ExportCsv(CurrentDeck) : DeckListCodec.ExportText(CurrentDeck);
+            var deck = Decks[selectedDeckIndex];
+            var content = csv ? DeckListCodec.ExportCsv(deck) : DeckListCodec.ExportText(deck);
             await JS.InvokeVoidAsync("spellbookStorage.download", csv ? "spellbook-deck.csv" : "spellbook-deck.txt", content, csv ? "text/csv;charset=utf-8" : "text/plain;charset=utf-8");
             message = "Deck list exported. Keep a JSON backup to preserve the complete collection.";
         }

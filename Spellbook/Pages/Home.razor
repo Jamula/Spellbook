@@ -5,7 +5,6 @@
 <h1>@(selected?.Name ?? "Edit deck")</h1>
 <p class="muted">Edit one deck. Changes are saved locally in this browser.</p>
 <p><a href="/">← All decks</a></p>
-<p role="note"><strong>Back up your decks:</strong> This browser storage does not sync to your other devices, and clearing Safari/browser data can erase it. Use <strong>Export JSON</strong> regularly and store the downloaded file somewhere safe.</p>
 @if (!loaded) { <p>Loading decks…</p> }
 else if (loadFailed)
 {
@@ -19,27 +18,88 @@ else if (selected is not null)
 {
     @if (!string.IsNullOrEmpty(message)) { <p role="status" class="note">@message</p> }
             <section class="editor">
-                <div class="editor-heading"><h2>@selected.Name</h2><button class="danger" @onclick="DeleteDeck">Delete deck</button></div>
+                <div class="editor-heading"><h2>@selected.Name</h2><button class="icon-action danger" title="Delete deck" aria-label="Delete deck" @onclick="RequestDeleteDeck"><span aria-hidden="true">×</span></button></div>
+                @if (confirmDeleteDeck)
+                {
+                    <div class="delete-confirmation" role="group" aria-label="Confirm deck deletion">
+                        <p>Delete this deck permanently? This cannot be undone.</p>
+                        <button class="danger" @onclick="DeleteDeck">Confirm delete</button>
+                        <button class="secondary" @onclick="CancelDeleteDeck">Cancel</button>
+                    </div>
+                }
                 <label>Deck name<input maxlength="160" @bind="selected.Name" @bind:after="Persist" /></label>
                 <label>Game format<select @bind="selected.Format" @bind:after="Persist"><option>Casual 60-card</option><option>Two-Headed Giant</option><option>Standard</option><option>Modern</option><option>Commander</option><option>Other</option></select></label>
                 <h3>Add a card</h3>
-                <div class="toolbar"><input aria-label="Card name" placeholder="Search Magic cards" @bind="cardName" @oninput="CardTyping" @onkeydown="HandleEnter" autocomplete="off" /><input class="qty" type="number" min="1" max="250" aria-label="Quantity" @bind="quantity" /><button @onclick="AddCard">Add</button></div>
+                <div class="toolbar"><input aria-label="Card name" placeholder="Search Magic cards" role="combobox" aria-autocomplete="list" aria-expanded="@(suggestions.Count > 0 ? "true" : "false")" aria-controls="card-suggestions" aria-activedescendant="@(activeSuggestionIndex >= 0 && activeSuggestionIndex < suggestions.Count ? $"card-suggestion-{activeSuggestionIndex}" : null)" @bind="cardName" @oninput="CardTyping" @onkeydown="HandleCardKeyDown" autocomplete="off" /><input class="qty" type="number" min="1" max="250" aria-label="Quantity" @bind="quantity" /><button @onclick="AddCard">Add</button></div>
                 @if (suggestions.Count > 0)
                 {
-                    <div class="card-suggestions" aria-label="Card suggestions">
-                        @foreach (var name in suggestions)
+                    <div id="card-suggestions" class="card-suggestions" role="listbox" aria-label="Card suggestions">
+                        @for (var i = 0; i < suggestions.Count; i++)
                         {
-                            <button class="card-suggestion" @onclick="() => ChooseSuggestion(name)">@name</button>
+                            var suggestion = suggestions[i];
+                            <button id="card-suggestion-@i" class="card-suggestion" role="option" aria-selected="@(i == activeSuggestionIndex ? "true" : "false")" @onclick="() => ChooseSuggestion(suggestion)">@suggestion.Name</button>
                         }
                     </div>
                 }
                 @if (!string.IsNullOrEmpty(searchMessage)) { <p class="muted" role="status">@searchMessage</p> }
                 <p class="muted">Suggestions powered by <a href="https://scryfall.com" target="_blank" rel="noopener noreferrer">Scryfall</a>. Typing sends only your search text to Scryfall. Manual entry works offline.</p>
                 <h3>Deck · @selected.CardCount cards (all zones)</h3>
-                <div class="card-rows">
+                <div class="card-display-controls" role="group" aria-label="Deck card display mode">
+                    <button class="secondary" aria-pressed="@(!visualMode)" @onclick="() => visualMode = false">List</button>
+                    <button class="secondary" aria-pressed="@visualMode" @onclick="() => visualMode = true">Visual</button>
+                </div>
+                <div class="card-rows @(visualMode ? "visual-mode" : "list-mode")" aria-label="Cards in @selected.Name">
                 @foreach (var card in selected.Cards.OrderBy(c => c.Name).ToList())
                 {
-                    <article class="card-row visual-card"><div class="visual-card-art" aria-hidden="true">✦</div><div class="visual-card-info"><a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @CardLabel(card) on Scryfall">@card.Name</a><label class="muted">Card title<input aria-label="Card title for @CardLabel(card)" maxlength="200" value="@card.Name" @onchange="e => RenameCard(card, e.Value?.ToString())" /></label><small>@card.Section</small></div><div class="row-actions"><button aria-label="Decrease quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button><strong aria-label="Quantity">@card.Quantity</strong><button aria-label="Increase quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button><button aria-label="Remove @CardLabel(card)" class="small danger" @onclick="() => RemoveCard(card)">×</button></div></article>
+                    <article class="card-row @(visualMode ? "visual-card" : "list-card")">
+                        @if (visualMode)
+                        {
+                            @if (IsScryfallImageUrl(card.Details?.ImageUrl))
+                            {
+                                <img class="visual-card-art" alt="Card image for @card.Name" loading="lazy" referrerpolicy="no-referrer" src="@card.Details!.ImageUrl" />
+                            }
+                            else
+                            {
+                                <div class="visual-card-art visual-card-fallback" aria-hidden="true">✦</div>
+                            }
+                        }
+                        <div class="visual-card-info">
+                            @if (editingCard == card)
+                            {
+                                <label class="muted">New card name
+                                    <input aria-label="New card name for @CardLabel(card)" maxlength="200" @bind="editCardName" @bind:event="oninput" disabled="@renameBusy" />
+                                </label>
+                                <div class="row-actions">
+                                    <button class="small" aria-label="Save card name for @CardLabel(card)" @onclick="() => SaveCardName(card)" disabled="@renameBusy">@(renameBusy ? "Checking…" : "Save")</button>
+                                    <button class="small secondary" aria-label="Cancel card name edit for @CardLabel(card)" @onclick="CancelCardNameEdit" disabled="@renameBusy">Cancel</button>
+                                </div>
+                                <p class="muted">Name edits are verified against Scryfall; manually added names can remain unverified.</p>
+                            }
+                            else
+                            {
+                                <div class="card-title-display">
+                                    <a href="@ScryfallCardSearchUrl(card.Name)" target="_blank" rel="noopener noreferrer" aria-label="Find @CardLabel(card) on Scryfall">@card.Name</a>
+                                    <button class="icon-action" title="Edit card name" aria-label="Edit card name for @CardLabel(card)" @onclick="() => StartCardNameEdit(card)"><span aria-hidden="true">✎</span></button>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(card.Details?.ManaCost))
+                            {
+                                <span class="mana-cost" aria-label="Mana cost @card.Details.ManaCost">
+                                    @foreach (var symbol in ParseManaSymbols(card.Details.ManaCost))
+                                    {
+                                        <span class="mana-symbol @ManaSymbolClass(symbol)" title="@symbol" aria-hidden="true">@ManaSymbolText(symbol)</span>
+                                    }
+                                </span>
+                            }
+                            <small>@card.Section</small>
+                        </div>
+                        <div class="row-actions card-quantity-actions">
+                            <button aria-label="Decrease quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, -1)">−</button>
+                            <strong aria-label="Quantity">@card.Quantity</strong>
+                            <button aria-label="Increase quantity for @CardLabel(card)" class="small" @onclick="() => ChangeQuantity(card, 1)">+</button>
+                            <button aria-label="Remove @CardLabel(card)" title="Remove card" class="icon-action danger" @onclick="() => RemoveCard(card)"><span aria-hidden="true">×</span></button>
+                        </div>
+                    </article>
                 }
                 </div>
                 <Spellbook.Components.DeckStatistics Deck="selected" OnChanged="Persist" />
@@ -120,7 +180,6 @@ else if (selected is not null)
                     }
                     </section>
             </section>
-    <Spellbook.Components.DeckListTransfer CurrentDeck="selected" OnImport="ImportDeckList" />
 }
 else
 {
@@ -141,7 +200,8 @@ else
     private bool confirmRecovery;
     private string lastSavedName = "";
     private string cardName = "";
-    private List<string> suggestions = [];
+    private List<ScryfallCard> suggestions = [];
+    private int activeSuggestionIndex = -1;
     private string searchMessage = "";
     private int searchGeneration;
     private ScryfallCard? verifiedScan;
@@ -163,6 +223,12 @@ else
     private int videoScanTotal;
     private string videoScanMessage = "";
     private List<VideoCardCandidate> videoCandidates = [];
+    private ScryfallCard? selectedCardMetadata;
+    private bool visualMode = true;
+    private DeckCard? editingCard;
+    private string editCardName = "";
+    private bool renameBusy;
+    private bool confirmDeleteDeck;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -191,9 +257,12 @@ else
         selectedDeckId = selected?.Id;
         lastSavedName = selected?.Name ?? "";
     }
+    private void RequestDeleteDeck() => confirmDeleteDeck = true;
+    private void CancelDeleteDeck() => confirmDeleteDeck = false;
     private async Task DeleteDeck()
     {
-        if (selected is null) return;
+        if (selected is null || !confirmDeleteDeck) return;
+        confirmDeleteDeck = false;
         ClearScan();
         decks.Remove(selected); selected = null; lastSavedName = "";
         await Persist();
@@ -204,15 +273,18 @@ else
         cardName = e.Value?.ToString() ?? "";
         var generation = ++searchGeneration;
         suggestions.Clear();
+        activeSuggestionIndex = -1;
+        selectedCardMetadata = null;
         searchMessage = "";
         if (cardName.Trim().Length < 2) return;
         try
         {
             await Task.Delay(350);
             if (generation != searchGeneration) return;
-            var result = await JS.InvokeAsync<string[]>("spellbookScryfall.autocomplete", cardName.Trim());
+            var result = await JS.InvokeAsync<ScryfallCard[]>("spellbookScryfall.autocomplete", cardName.Trim());
             if (generation != searchGeneration) return;
-            suggestions = result.Take(10).ToList();
+            suggestions = (result ?? []).Take(10).Where(card => !string.IsNullOrWhiteSpace(card.Name)).ToList();
+            activeSuggestionIndex = suggestions.Count > 0 ? 0 : -1;
             searchMessage = suggestions.Count == 0 ? "No suggestions. You can still add the name manually." : "";
         }
         catch (JSException)
@@ -226,10 +298,12 @@ else
         }
     }
 
-    private void ChooseSuggestion(string name)
+    private void ChooseSuggestion(ScryfallCard suggestion)
     {
-        cardName = name;
+        cardName = suggestion.Name;
+        selectedCardMetadata = suggestion;
         suggestions.Clear();
+        activeSuggestionIndex = -1;
         searchGeneration++;
         searchMessage = "";
     }
@@ -272,11 +346,51 @@ else
     {
         if (selected is null || string.IsNullOrWhiteSpace(cardName) || quantity < 1 || quantity > 250) return;
         var existing = selected.Cards.FirstOrDefault(c => string.Equals(c.Section.Trim(), "Main", StringComparison.OrdinalIgnoreCase) && string.Equals(c.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (existing is not null) existing.Quantity = Math.Min(250, existing.Quantity + quantity);
-        else selected.Cards.Add(new DeckCard { Name = cardName.Trim(), Quantity = quantity });
-        cardName = ""; quantity = 1; suggestions.Clear(); searchGeneration++; await Persist();
+        if (existing is not null)
+        {
+            existing.Quantity = Math.Min(250, existing.Quantity + quantity);
+            if (selectedCardMetadata is not null && string.Equals(selectedCardMetadata.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase))
+                existing.Details = MergeScryfallDetails(existing.Details, selectedCardMetadata);
+        }
+        else
+        {
+            var card = new DeckCard { Name = cardName.Trim(), Quantity = quantity };
+            if (selectedCardMetadata is not null && string.Equals(selectedCardMetadata.Name, cardName.Trim(), StringComparison.OrdinalIgnoreCase))
+                card.Details = MergeScryfallDetails(null, selectedCardMetadata);
+            selected.Cards.Add(card);
+        }
+        cardName = ""; quantity = 1; suggestions.Clear(); activeSuggestionIndex = -1; searchGeneration++; await Persist();
+        selectedCardMetadata = null;
     }
-    private Task HandleEnter(KeyboardEventArgs e) => e.Key == "Enter" ? AddCard() : Task.CompletedTask;
+    private async Task HandleCardKeyDown(KeyboardEventArgs e)
+    {
+        if (suggestions.Count == 0)
+        {
+            if (e.Key == "Enter") await AddCard();
+            return;
+        }
+
+        if (e.Key == "ArrowDown")
+        {
+            activeSuggestionIndex = Math.Min(suggestions.Count - 1, activeSuggestionIndex + 1);
+            await JS.InvokeVoidAsync("spellbookScryfall.scrollSuggestionIntoView", activeSuggestionIndex);
+        }
+        else if (e.Key == "ArrowUp")
+        {
+            activeSuggestionIndex = Math.Max(0, activeSuggestionIndex - 1);
+            await JS.InvokeVoidAsync("spellbookScryfall.scrollSuggestionIntoView", activeSuggestionIndex);
+        }
+        else if (e.Key == "Enter" && activeSuggestionIndex >= 0)
+        {
+            ChooseSuggestion(suggestions[activeSuggestionIndex]);
+        }
+        else if (e.Key == "Escape")
+        {
+            suggestions.Clear();
+            activeSuggestionIndex = -1;
+            searchGeneration++;
+        }
+    }
     private async Task ChangeQuantity(DeckCard card, int delta)
     {
         if (selected is null) return;
@@ -286,19 +400,94 @@ else
         await Persist();
     }
     private async Task RemoveCard(DeckCard card) { selected?.Cards.Remove(card); await Persist(); }
-    private async Task RenameCard(DeckCard card, string? proposedName)
+    private void StartCardNameEdit(DeckCard card)
     {
-        var name = proposedName?.Trim();
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 200)
+        editingCard = card;
+        editCardName = card.Name;
+        message = "";
+    }
+
+    private void CancelCardNameEdit()
+    {
+        editingCard = null;
+        editCardName = "";
+    }
+
+    private async Task SaveCardName(DeckCard card)
+    {
+        if (selected is null || renameBusy || editingCard != card) return;
+        var name = editCardName.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || name.Any(char.IsControl))
         {
-            message = "Enter a card title with 1–200 characters.";
+            message = "Enter a card name with 1–200 characters and no control characters.";
+            return;
+        }
+        if (string.Equals(name, card.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            CancelCardNameEdit();
+            return;
+        }
+        if (selected.Cards.Any(other => other != card &&
+            string.Equals(other.Section.Trim(), card.Section.Trim(), StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(other.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)))
+        {
+            message = "A card with that name already exists in this section. Adjust its quantity instead.";
             return;
         }
 
-        card.Name = name;
-        await Persist();
-        message = "Card title saved.";
+        renameBusy = true;
+        try
+        {
+            var verified = await JS.InvokeAsync<ScryfallCard?>("spellbookScryfall.exact", name);
+            if (verified is null)
+            {
+                message = "No exact Scryfall card match. The saved name was not changed.";
+                return;
+            }
+            card.Name = verified.Name;
+            card.Details = MergeScryfallDetails(card.Details, verified);
+            await Persist();
+            editingCard = null;
+            editCardName = "";
+            message = "Card name verified and saved.";
+        }
+        catch (JSException)
+        {
+            message = "Scryfall could not verify this name. The saved name was not changed; try again when lookup is available.";
+        }
+        finally { renameBusy = false; }
     }
+
+    private static CardDetails MergeScryfallDetails(CardDetails? existing, ScryfallCard result)
+    {
+        var details = existing ?? new CardDetails();
+        details.ManaValue = result.ManaValue;
+        details.TypeLine = result.TypeLine;
+        details.ManaCost = result.ManaCost;
+        details.ImageUrl = IsScryfallImageUrl(result.ImageUrl) ? result.ImageUrl : null;
+        if (result.Colors.Length > 0) details.Colors = string.Concat(result.Colors);
+        return details;
+    }
+
+    private static bool IsScryfallImageUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        uri.Host.Equals("cards.scryfall.io", StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> ParseManaSymbols(string manaCost) =>
+        System.Text.RegularExpressions.Regex.Matches(manaCost, @"\{([^{}]{1,12})\}")
+            .Cast<System.Text.RegularExpressions.Match>()
+            .Select(match => match.Groups[1].Value)
+            .Take(16);
+
+    private static string ManaSymbolClass(string symbol) =>
+        symbol.Contains("W", StringComparison.OrdinalIgnoreCase) ? "mana-white" :
+        symbol.Contains("U", StringComparison.OrdinalIgnoreCase) ? "mana-blue" :
+        symbol.Contains("B", StringComparison.OrdinalIgnoreCase) ? "mana-black" :
+        symbol.Contains("R", StringComparison.OrdinalIgnoreCase) ? "mana-red" :
+        symbol.Contains("G", StringComparison.OrdinalIgnoreCase) ? "mana-green" : "mana-generic";
+
+    private static string ManaSymbolText(string symbol) => symbol.Length > 5 ? "…" : symbol;
     private async Task Persist()
     {
         if (loadFailed) return;
@@ -317,15 +506,6 @@ else
         lastSavedName = selected?.Name ?? "";
     }
     private static string CardLabel(DeckCard card) => card.Section == "Main" ? card.Name : $"{card.Name} ({card.Section})";
-    private async Task ImportDeckList(Deck deck)
-    {
-        var importedDecks = decks.Append(deck).ToList();
-        await Store.SaveAsync(importedDecks);
-        ClearScan();
-        decks = importedDecks; selected = deck; lastSavedName = deck.Name;
-        selectedDeckId = deck.Id;
-        Navigation.NavigateTo($"/deck/{deck.Id}");
-    }
     private Task ExportDamaged() => Store.ExportDamagedAsync();
     private async Task RecoverImport(InputFileChangeEventArgs e)
     {

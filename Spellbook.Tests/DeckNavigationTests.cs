@@ -52,6 +52,9 @@ public sealed class DeckNavigationTests
         context.Services.AddScoped<DeckStore>();
         var page = context.Render<Decks>();
         page.WaitForAssertion(() => TestChecks.Contains("Alpha", page.Markup));
+        TestChecks.Empty(page.FindAll(".decklist-transfer"));
+        TestChecks.IsTrue(page.Find(".deck-tile button[aria-label='Open deck Alpha']").TextContent.Length > 0);
+        TestChecks.AreEqual("Delete deck Alpha", page.Find(".deck-tile button[aria-label='Delete deck Alpha']").GetAttribute("aria-label"));
         page.Find("input[aria-label='Deck name for Alpha']").Change("Beta");
         TestChecks.Contains("Deck name saved", page.Markup);
         page.Find("button.danger").Click();
@@ -209,7 +212,7 @@ public sealed class DeckNavigationTests
         var page = context.Render<Settings>();
         page.WaitForAssertion(() => TestChecks.Contains("Import JSON backup", page.Markup));
 
-        page.FindComponents<InputFile>().Single().UploadFiles(
+        page.FindComponents<InputFile>().First().UploadFiles(
             InputFileContent.CreateFromText("[{\"name\":\"Imported\"}]", "backup.json"));
 
         TestChecks.Contains("Import failed", page.Markup);
@@ -228,7 +231,16 @@ public sealed class DeckNavigationTests
         var page = context.Render<Home>(parameters => parameters.Add(component => component.DeckId, deck.Id));
         page.WaitForAssertion(() => TestChecks.Contains("Alpha", page.Markup));
 
-        page.Find("button.danger").Click();
+        var deleteButton = page.Find("button[aria-label='Delete deck']");
+        TestChecks.AreEqual("Delete deck", deleteButton.GetAttribute("title"));
+        TestChecks.AreEqual("×", deleteButton.TextContent);
+        deleteButton.Click();
+        TestChecks.Contains("Delete this deck permanently?", page.Markup);
+        TestChecks.Contains("Alpha", page.Markup);
+        page.FindAll("button").Single(button => button.TextContent == "Cancel").Click();
+        TestChecks.DoesNotContain("Confirm deck deletion", page.Markup);
+        page.Find("button[aria-label='Delete deck']").Click();
+        page.FindAll("button").Single(button => button.TextContent == "Confirm delete").Click();
         TestChecks.AreEqual("/", new Uri(context.Services.GetRequiredService<NavigationManager>().Uri).AbsolutePath);
     }
 

@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { webkit, devices } from 'playwright';
 
-const origin = 'http://127.0.0.1:4173';
+const origin = process.env.SPELLBOOK_TEST_ORIGIN ?? 'http://127.0.0.1:4173';
 const browser = await webkit.launch({ headless: true });
 after(async () => browser.close());
 
@@ -63,21 +63,73 @@ test('iPhone WebKit creates a deck, edits a card and persists after reload', asy
   const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
   const page = await context.newPage();
   try {
+    await page.route('https://api.scryfall.com/**', route => {
+      const url = new URL(route.request().url());
+      const name = url.pathname === '/cards/named' ? (url.searchParams.get('exact') ?? 'Avacyn, Angel of Hope') : 'Avacyn, Angel of Hope';
+      const card = {
+        object: 'card', name, cmc: 8, mana_cost: '{5}{W}{W}{W}', type_line: 'Legendary Creature — Angel',
+        colors: ['W'], image_uris: { small: 'https://cards.scryfall.io/small/front/a/b/avacyn.jpg' },
+        scryfall_uri: 'https://scryfall.com/card/avr/6/avacyn-angel-of-hope'
+      };
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(url.pathname === '/cards/named' ? card : { object: 'list', data: [card] })
+      });
+    });
+    await page.route('https://cards.scryfall.io/**', route => route.abort());
     await openAppReady(page);
     await page.getByRole('button', { name: 'Create deck' }).waitFor({ timeout: 30000 });
     await page.getByRole('textbox', { name: 'New deck name' }).fill('WebKit smoke deck');
     await page.getByRole('button', { name: 'Create deck' }).click();
     await page.getByRole('heading', { name: 'WebKit smoke deck', level: 1 }).waitFor();
-    await page.getByRole('textbox', { name: 'Card name' }).fill('Avacyn, Angel of Hope');
+    await page.getByRole('combobox', { name: 'Card name' }).fill('Avacyn, Angel of Hope');
+    await page.getByRole('option', { name: 'Avacyn, Angel of Hope' }).click();
     await page.getByRole('button', { name: 'Add', exact: true }).click();
     await page.getByText('Avacyn, Angel of Hope', { exact: true }).first().waitFor();
+    await page.getByRole('img', { name: 'Card image for Avacyn, Angel of Hope' }).waitFor();
+    assert.equal(await page.locator('.mana-symbol').count(), 4);
+    await page.getByRole('button', { name: 'List', exact: true }).click();
+    await page.locator('.card-rows.list-mode').waitFor();
+    assert.equal(await page.locator('.visual-card-art').count(), 0);
+    await page.getByRole('button', { name: 'Visual', exact: true }).click();
+    await page.locator('.card-rows.visual-mode').waitFor();
+
+    await page.getByRole('button', { name: 'Edit card name for Avacyn, Angel of Hope' }).click();
+    await page.getByRole('textbox', { name: 'New card name for Avacyn, Angel of Hope' }).fill('Avacyn of Providence');
+    await page.getByRole('button', { name: 'Save card name for Avacyn, Angel of Hope' }).click();
+    await page.getByText('Card name verified and saved').waitFor();
+    await page.getByRole('button', { name: 'Delete deck', exact: true }).click();
+    await page.getByText('Delete this deck permanently? This cannot be undone.').waitFor();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    const openDeck = page.getByRole('button', { name: 'Open deck' });
+    const openDeck = page.getByRole('button', { name: /^Open deck/ });
     await openDeck.waitFor({ timeout: 30000 });
     await openDeck.click();
     await page.getByRole('heading', { name: 'WebKit smoke deck', level: 1 }).waitFor({ timeout: 30000 });
-    await page.getByText('Avacyn, Angel of Hope', { exact: true }).first().waitFor();
+    await page.getByText('Avacyn of Providence', { exact: true }).first().waitFor();
     assert.match(await page.locator('.brand-version').innerText(), /^v0\.1\.\d+/);
+  } finally {
+    await context.close();
+  }
+});
+
+test('iPhone WebKit can find deck-list interchange under Settings Import', async () => {
+  const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
+  const page = await context.newPage();
+  try {
+    await openAppReady(page);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await page.getByRole('heading', { name: 'Import', level: 2 }).waitFor();
+    await page.getByRole('heading', { name: 'Deck-list import and export', level: 3 }).waitFor();
+    await page.getByRole('textbox', { name: 'Imported deck name' }).waitFor();
+    await page.getByRole('textbox', { name: 'Deck list' }).waitFor();
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('link', { name: 'Decks' }).click();
+    await page.getByRole('heading', { name: 'My decks' }).waitFor();
+    assert.equal(await page.locator('.decklist-transfer').count(), 0);
+    assert.equal(await page.getByText('Back up your decks').count(), 0);
   } finally {
     await context.close();
   }

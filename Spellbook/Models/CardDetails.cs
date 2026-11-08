@@ -5,6 +5,8 @@ public sealed class CardDetails
 {
     public double? ManaValue { get; set; }
     public string? TypeLine { get; set; }
+    public string? ManaCost { get; set; }
+    public string? ImageUrl { get; set; }
     // W/U/B/R/G, or C for colorless. Missing/invalid values remain unknown.
     public string? Colors { get; set; }
     public bool RolesReviewed { get; set; }

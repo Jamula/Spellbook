@@ -47,7 +47,23 @@ window.spellbookScryfall = (() => {
     const body = await cached("n:" + q.toLowerCase(),
       "/cards/search?q=" + encodeURIComponent(phrase) + "&unique=cards&order=name");
     if (!Array.isArray(body?.data)) return [];
-    return [...new Set(body.data.map(card => card?.name).filter(name => typeof name === "string"))].slice(0, 10);
+    const results = [];
+    const seen = new Set();
+    for (const card of body.data) {
+      if (typeof card?.name !== "string" || seen.has(card.name)) continue;
+      seen.add(card.name);
+      results.push({
+        name: card.name,
+        manaValue: Number(card.cmc) || 0,
+        manaCost: card.mana_cost || card.card_faces?.map(face => face.mana_cost).filter(Boolean).join(" // ") || "",
+        typeLine: card.type_line || card.card_faces?.map(face => face.type_line).filter(Boolean).join(" // ") || "",
+        colors: Array.isArray(card.colors) ? card.colors : [],
+        imageUrl: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || null,
+        scryfallUrl: card.scryfall_uri || null
+      });
+      if (results.length === 10) break;
+    }
+    return results;
   }
   async function exact(name) {
     const n = String(name || "").trim();
@@ -58,12 +74,16 @@ window.spellbookScryfall = (() => {
     return {
       name: body.name,
       manaValue: Number(body.cmc) || 0,
-      manaCost: body.mana_cost || "",
+      manaCost: body.mana_cost || body.card_faces?.map(face => face.mana_cost).filter(Boolean).join(" // ") || "",
       typeLine: body.type_line || "",
       colors: Array.isArray(body.colors) ? body.colors : [],
       imageUrl: body.image_uris?.small || body.card_faces?.[0]?.image_uris?.small || null,
       scryfallUrl: body.scryfall_uri || null
     };
   }
-  return { autocomplete, exact };
+  function scrollSuggestionIntoView(index) {
+    const option = document.getElementById("card-suggestion-" + Number(index));
+    option?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  return { autocomplete, exact, scrollSuggestionIntoView };
 })();

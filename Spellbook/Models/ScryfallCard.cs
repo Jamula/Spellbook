@@ -8,7 +8,9 @@ public sealed class ScryfallCard
 {
     public string Name { get; set; } = "";
     public double ManaValue { get; set; }
+    public string ManaCost { get; set; } = "";
     public string TypeLine { get; set; } = "";
+    public string[] Colors { get; set; } = [];
     public string? ImageUrl { get; set; }
     public string? ScryfallUrl { get; set; }
 }
