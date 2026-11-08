@@ -19,13 +19,13 @@
         <label class="feedback-consent"><input type="checkbox" @bind="approved" /> I have reviewed this text and understand that the GitHub issue will be public.</label>
         @if (!string.IsNullOrEmpty(status)) { <p role="status">@status</p> }
         @if (!string.IsNullOrEmpty(issueUrl)) { <p><a href="@issueUrl" target="_blank" rel="noopener noreferrer">View created GitHub issue</a></p> }
-        @if (status.Contains("not configured yet", StringComparison.Ordinal))
+        @if (!available && !string.IsNullOrEmpty(status))
         {
             <p><a href="https://github.com/Jamula/Spellbook/issues/new" target="_blank" rel="noopener noreferrer">Use GitHub directly until in-app submission is available</a></p>
         }
         <div class="feedback-actions">
             <button type="button" class="secondary" @onclick="Close">Cancel</button>
-            <button type="button" disabled="@sending" @onclick="Send">@(sending ? "Submitting…" : "Submit feedback")</button>
+            <button type="button" disabled="@(!CanSubmit)" @onclick="Send">@(sending ? "Submitting…" : "Submit feedback")</button>
         </div>
         <div class="feedback-turnstile" aria-label="Spam prevention verification"></div>
     </dialog>
@@ -38,20 +38,26 @@
     private string details = "";
     private bool approved;
     private bool sending;
+    private bool available;
     private string status = "";
     private string? issueUrl;
+    private bool CanSubmit => available && !sending && approved && subject.Trim().Length is >= 3 and <= 120 && details.Trim().Length is >= 10 and <= 4000;
 
     private async Task Open()
     {
         status = "";
-        if (!await JS.InvokeAsync<bool>("spellbookFeedback.open", dialog))
-            status = "Feedback submission is not configured yet. Please try again later.";
+        issueUrl = null;
+        available = false;
+        try { available = await JS.InvokeAsync<bool>("spellbookFeedback.open", dialog); }
+        catch (JSException) { available = false; }
+        if (!available)
+            status = "In-app feedback is unavailable because secure submission is not configured or could not be reached.";
     }
     private Task Close() => JS.InvokeVoidAsync("spellbookFeedback.close", dialog).AsTask();
 
     private async Task Send()
     {
-        if (sending) return;
+        if (sending || !available) return;
         issueUrl = null;
         if (!approved || subject.Trim().Length is < 3 or > 120 || details.Trim().Length is < 10 or > 4000)
         {
@@ -70,9 +76,11 @@
             issueUrl = result;
             status = "Your feedback was submitted. The GitHub issue is ready to view.";
         }
-        catch (JSException)
+        catch (JSException ex)
         {
-            status = "Feedback could not be submitted. Your text is still here; please try again.";
+            status = ex.Message.Contains("Complete the spam prevention challenge", StringComparison.OrdinalIgnoreCase)
+                ? "Complete the spam prevention challenge before submitting. Your text is still here."
+                : "Feedback could not be submitted. Your text is still here; please try again.";
         }
         finally { sending = false; }
     }
