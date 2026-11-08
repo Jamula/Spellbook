@@ -118,6 +118,10 @@ public sealed class DeckNavigationTests
         var page = context.Render<Decks>();
         page.WaitForAssertion(() => TestChecks.Contains("Alpha", page.Markup));
 
+        var importer = page.FindComponents<InputFile>().Single();
+        importer.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
+        TestChecks.Contains("Import failed", page.Markup);
+
         page.Find("button.secondary").Click();
         var download = TestChecks.Single(context.JSInterop.Invocations["spellbookStorage.download"]);
         TestChecks.AreEqual("spellbook-decks.json", download.Arguments[0]);
@@ -134,6 +138,22 @@ public sealed class DeckNavigationTests
         TestChecks.AreEqual(2, saved.Count);
         TestChecks.AreEqual("Imported", saved[1].Name);
         TestChecks.AreEqual(3, saved[1].CardCount);
+    }
+
+    [TestMethod]
+    public void DeckEditorCanDeleteTheSelectedDeckAndReturnToCollection()
+    {
+        var deck = new Deck { Name = "Alpha" };
+        using var context = new BunitContext();
+        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true)
+            .SetResult(JsonSerializer.Serialize(new[] { deck }));
+        context.JSInterop.SetupVoid("spellbookStorage.set", _ => true).SetVoidResult();
+        context.Services.AddScoped<DeckStore>();
+        var page = context.Render<Home>(parameters => parameters.Add(component => component.DeckId, deck.Id));
+        page.WaitForAssertion(() => TestChecks.Contains("Alpha", page.Markup));
+
+        page.Find("button.danger").Click();
+        TestChecks.AreEqual("/", new Uri(context.Services.GetRequiredService<NavigationManager>().Uri).AbsolutePath);
     }
 
     [TestMethod]

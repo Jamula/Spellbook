@@ -77,7 +77,7 @@ test('iPhone WebKit creates a deck, edits a card and persists after reload', asy
     await openDeck.click();
     await page.getByRole('heading', { name: 'WebKit smoke deck', level: 1 }).waitFor({ timeout: 30000 });
     await page.getByText('Avacyn, Angel of Hope', { exact: true }).first().waitFor();
-    assert.match(await page.locator('.app-version').innerText(), /^Version 0\.1\.\d+/);
+    assert.match(await page.locator('.brand-version').innerText(), /^v0\.1\.\d+/);
   } finally {
     await context.close();
   }
