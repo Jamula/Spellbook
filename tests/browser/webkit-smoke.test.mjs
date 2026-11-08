@@ -103,8 +103,9 @@ test('iPhone WebKit opens in-app feedback modal without navigation or private da
     await dialog.getByRole('textbox', { name: 'Title' }).fill('Scanner feedback');
     await dialog.getByRole('textbox', { name: 'Description and reproduction steps' })
       .fill('A mana symbol was included with the recognized card name.');
-    await page.getByText('Feedback submission is not configured yet').waitFor();
+    await page.getByText('In-app feedback is unavailable because secure submission is not configured or could not be reached.').waitFor();
     assert.equal(await dialog.getByRole('link', { name: /Use GitHub directly/ }).count(), 1);
+    assert.equal(await dialog.getByRole('button', { name: 'Submit feedback' }).isDisabled(), true);
     assert.equal(new URL(page.url()).pathname, '/');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     assert.equal(await dialog.evaluate(element => element.open), false);
