@@ -45,7 +45,7 @@ else if (selected is not null)
                 <Spellbook.Components.DeckStatistics Deck="selected" OnChanged="Persist" />
                 <section class="card-scan-panel" aria-label="Scan a card">
                     <h3>Scan a card from a photo or video</h3>
-                    <p>Choose a photo, an iPhone HEIC image, or a video. Scan a video locally to find cards across sampled frames, or scrub and capture one frame. Video OCR runs on this device; media is not uploaded. Stack-edge counts are not reliable enough to estimate yet, so review and correct quantities manually.</p>
+                    <p>Choose a photo, an iPhone HEIC image, or a video. Scan a video locally to find cards across sampled frames, or scrub and capture one frame. Video OCR and stack-edge estimates run on this device; media is not uploaded. For better estimates, keep visible stack edges in focus; no fixed camera angle is required. Estimates are low-confidence and editable.</p>
                     <InputFile id="card-media-picker" OnChange="MediaSelected" accept="image/*,.heic,.heif,video/*" multiple />
                     @if (!string.IsNullOrEmpty(videoUrl))
                     {
@@ -61,20 +61,20 @@ else if (selected is not null)
                                 <button class="secondary" @onclick="CancelVideoScan">Cancel video scan</button>
                             }
                             <button @onclick="CaptureVideoFrame" disabled="@mediaBusy">Capture selected video frame</button>
-                            <p class="muted">Automatic scanning samples up to 100 frames across the clip. Longer clips are sampled more sparsely. Check the result list; stack quantities require manual correction.</p>
+                            <p class="muted">Automatic scanning samples up to 100 frames across the clip. Longer clips are sampled more sparsely. Check and correct each stack estimate before adding.</p>
                         </div>
                     }
                     @if (videoCandidates.Count > 0)
                     {
                         <section class="video-scan-review" aria-label="Video card scan review">
                             <h4>Review cards found in video</h4>
-                            <p>Repeated sightings in nearby frames are combined. Stack edge counts are currently unavailable, so set each quantity before adding.</p>
+                            <p>Repeated sightings in nearby frames are combined. Any detected stack quantity is a low-confidence estimate from visible edges; correct it before adding.</p>
                             @foreach (var candidate in videoCandidates)
                             {
                                 <div class="video-candidate">
                                     <label>Card name<input maxlength="200" @bind="candidate.Name" /></label>
                                     <label>Quantity<input type="number" min="1" max="250" @bind="candidate.Quantity" /></label>
-                                    <small>Stack estimate: unavailable · enter or correct quantity</small>
+                                    <small>@candidate.EstimateLabel</small>
                                 </div>
                             }
                             <button @onclick="AddVideoCandidates" disabled="@mediaBusy">Add reviewed cards</button>
@@ -449,7 +449,6 @@ else
         finally { mediaBusy = false; }
     }
 
-    private sealed class VideoCardCandidate { public string Name { get; set; } = ""; public int Quantity { get; set; } = 1; public double LastSeen { get; set; } }
 
     [JSInvokable]
     public Task OnVideoScanProgress(int current, int total)
@@ -468,21 +467,11 @@ else
         try
         {
             var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("spellbookMedia.scanVideo", "card-video-preview", callback);
-            var consecutive = new Dictionary<string, VideoCardCandidate>(StringComparer.OrdinalIgnoreCase);
-            foreach (var frame in result.GetProperty("frames").EnumerateArray())
-            {
-                var name = Spellbook.Services.CardTitleExtractor.FromOcr(frame.GetProperty("text").GetString()).Trim();
-                if (name.Length is < 2 or > 200) continue;
-                var key = string.Join(' ', name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-                var time = frame.GetProperty("time").GetDouble();
-                if (consecutive.TryGetValue(key, out var prior) && time - prior.LastSeen <= 2.25)
-                {
-                    prior.LastSeen = time;
-                    continue;
-                }
-                var candidate = new VideoCardCandidate { Name = key, LastSeen = time };
-                videoCandidates.Add(candidate); consecutive[key] = candidate;
-            }
+            var frames = result.GetProperty("frames").EnumerateArray().Select(frame => new Spellbook.Services.VideoOcrFrame(
+                frame.GetProperty("time").GetDouble(),
+                frame.GetProperty("text").GetString() ?? "",
+                frame.TryGetProperty("stackCountEstimate", out var estimate) && estimate.ValueKind == System.Text.Json.JsonValueKind.Number && estimate.TryGetInt32(out var count) ? count : null));
+            videoCandidates = Spellbook.Services.VideoCardCandidateBuilder.Build(frames);
             videoScanMessage = result.GetProperty("cancelled").GetBoolean() ? "Scan cancelled; review the cards found so far." : $"Scan complete. Review {videoCandidates.Count} candidate(s).";
         }
         catch (JSException)

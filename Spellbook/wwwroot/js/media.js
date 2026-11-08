@@ -138,6 +138,55 @@ window.spellbookMedia = (() => {
       video.currentTime = time;
     });
   }
+  function estimateStackEdges(dataUrl) {
+    return new Promise(resolve => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, 240 / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) return resolve(null);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const { width, height } = canvas;
+        const pixels = context.getImageData(0, 0, width, height).data;
+        const gray = new Float32Array(width * height);
+        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+          const p = (y * width + x) * 4;
+          gray[y * width + x] = (pixels[p] * 299 + pixels[p + 1] * 587 + pixels[p + 2] * 114) / 1000;
+        }
+        let best = null;
+        // Project edge energy at several orientations so the estimate does not require a fixed phone angle.
+        for (let angle = 0; angle < 180; angle += 15) {
+          const radians = angle * Math.PI / 180, nx = Math.cos(radians), ny = Math.sin(radians);
+          const limit = Math.ceil(Math.abs(nx) * width + Math.abs(ny) * height);
+          const profile = new Float32Array(limit * 2 + 1);
+          for (let y = 1; y < height - 1; y += 2) for (let x = 1; x < width - 1; x += 2) {
+            const i = y * width + x;
+            const gx = (gray[i + 1] - gray[i - 1]) / 2;
+            const gy = (gray[i + width] - gray[i - width]) / 2;
+            const energy = Math.abs(gx * nx + gy * ny);
+            if (energy < 24) continue;
+            const r = Math.round(x * nx + y * ny) + limit;
+            profile[r] += energy;
+          }
+          const smooth = new Float32Array(profile.length);
+          for (let i = 2; i < profile.length - 2; i++) smooth[i] = (profile[i - 2] + profile[i - 1] + profile[i] + profile[i + 1] + profile[i + 2]) / 5;
+          const mean = smooth.reduce((a, b) => a + b, 0) / smooth.length;
+          const peaks = [];
+          for (let i = 3; i < smooth.length - 3; i++) {
+            if (smooth[i] > mean * 2.2 && smooth[i] >= smooth[i - 1] && smooth[i] >= smooth[i + 1] && (!peaks.length || i - peaks[peaks.length - 1] >= 3)) peaks.push(i);
+          }
+          if (peaks.length >= 3 && (!best || peaks.length > best.count)) best = { count: peaks.length };
+        }
+        // A weak visual heuristic only; face-on cards and unclear edges stay unavailable.
+        resolve(best && best.count >= 4 ? { count: Math.max(2, Math.min(250, best.count)), confidence: "low" } : null);
+      };
+      image.onerror = () => resolve(null);
+      image.src = dataUrl;
+    });
+  }
   async function scanVideo(videoId, callback) {
     const video = document.getElementById(videoId);
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0) throw new Error("Video duration is unavailable");
@@ -153,7 +202,8 @@ window.spellbookMedia = (() => {
         await seek(video, times[i]);
         const image = captureFrame(videoId);
         const text = await recognize(image);
-        frames.push({ time: times[i], text });
+        const stack = text.trim() ? await estimateStackEdges(image) : null;
+        frames.push({ time: times[i], text, stackCountEstimate: stack?.count ?? null, stackConfidence: stack?.confidence ?? "unavailable" });
         if (callback) await callback.invokeMethodAsync("OnVideoScanProgress", i + 1, times.length);
       }
       return { frames, cancelled: cancelScan, sampledFrames: times.length };
@@ -162,5 +212,5 @@ window.spellbookMedia = (() => {
   function cancelVideoScan() { cancelScan = true; }
   window.addEventListener("pagehide", releaseVideo);
 
-  return { recognize, convertHeic, prepareVideo, captureFrame, scanVideo, cancelVideoScan, releaseVideo };
+  return { recognize, convertHeic, prepareVideo, captureFrame, scanVideo, cancelVideoScan, estimateStackEdges, releaseVideo };
 })();
