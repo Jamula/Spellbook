@@ -24,7 +24,7 @@ The required check names are unchanged:
 
 | Check | Purpose |
 | --- | --- |
-| `build` | Restore, Release build/publish, validate and retain static assets |
+| `build` | Restore, Release build/publish, validate and retain static assets, run iPhone WebKit smoke and seeded randomized usage tests |
 | `Test coverage` | Run .NET tests, enforce coverage, retain and upload Cobertura |
 | `CodeQL` | GitHub's security-scanning summary required by branch rules |
 

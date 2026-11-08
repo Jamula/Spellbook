@@ -86,6 +86,26 @@ jobs:
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 --directory publish/wwwroot >/tmp/spellbook-http.log 2>&1 &
           node --test tests/browser/webkit-smoke.test.mjs
+      - name: Run seeded randomized iPhone WebKit usage
+        env:
+          SPELLBOOK_RANDOMIZED_ITERATIONS: ${{ vars.SPELLBOOK_RANDOMIZED_ITERATIONS || '3' }}
+          SPELLBOOK_RANDOMIZED_SEED: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory publish/wwwroot >/tmp/spellbook-randomized-http.log 2>&1 &
+          node tests/browser/randomized-usage.runner.mjs \
+            --iterations "$SPELLBOOK_RANDOMIZED_ITERATIONS" \
+            --seed "$SPELLBOOK_RANDOMIZED_SEED" \
+            --report tests/browser/randomized-usage-report.json
+      - name: Upload randomized usage diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: spellbook-randomized-usage
+          path: |
+            tests/browser/randomized-usage-report.json
+            /tmp/spellbook-randomized-http.log
+          if-no-files-found: ignore
+          retention-days: 14
 
 
   coverage:
@@ -118,6 +138,8 @@ jobs:
         run: node --test tests/feedback-worker.test.mjs
       - name: Test Scryfall substring search
         run: node --test tests/scryfall-search.test.mjs
+      - name: Test randomized usage runner determinism
+        run: node --test tests/randomized-usage-core.test.mjs
       - name: Test with Cobertura coverage
         id: tests
         run: >-

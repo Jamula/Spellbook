@@ -41,6 +41,18 @@ Use a fresh `coverage` directory for each run. Coverage measures the application
 
 GitHub Actions runs the tests, enforces an 80% minimum application line coverage, saves a downloadable Cobertura report, and uploads it directly to GitHub's built-in coverage service. No separate service, secret, or paid API is required. Fork PRs run tests and retain the report without requesting write access to the base repository. The `Test coverage` check should be required in branch rules so merging waits for coverage upload. Coverage on `main` establishes the baseline after merge.
 
+## Randomized usage runner
+
+Use the seeded Playwright runner for repeatable iPhone WebKit product sessions
+that exercise deck create/edit, import/export, settings, and local card intake
+flows. The runner uses synthetic local data and blocks non-local network
+requests.
+
+`node tests/browser/randomized-usage.runner.mjs --iterations 3 --seed local-baseline --report /tmp/spellbook-randomized-usage-report.json`
+
+See [`docs/randomized-usage-testing.md`](docs/randomized-usage-testing.md) for setup,
+repro steps, and flow minimization commands.
+
 ## Cost & privacy safeguards
 - No Azure resources, paid APIs, or external services are required.
 - Cards are entered manually; no automatic Scryfall lookup or AI usage yet.
