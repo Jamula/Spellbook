@@ -116,6 +116,8 @@ jobs:
         run: node --test scripts/privacy.test.cjs
       - name: Test Cloudflare feedback security boundary
         run: node --test tests/feedback-worker.test.mjs
+      - name: Test Scryfall substring search
+        run: node --test tests/scryfall-search.test.mjs
       - name: Test with Cobertura coverage
         id: tests
         run: >-
