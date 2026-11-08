@@ -4,7 +4,7 @@
     <header class="shell-header">
         <a class="brand" href="/">✦ Spellbook <AppVersion /></a>
         <button class="navigation-toggle secondary" type="button"
-                aria-controls="app-navigation" aria-expanded="@navigationOpen"
+                aria-controls="app-navigation" aria-expanded="@(navigationOpen ? "true" : "false")"
                 @onclick="ToggleNavigation" @ref="navigationToggle">
             <span class="navigation-toggle-icon" aria-hidden="true">☰</span>
             <span>Menu</span>

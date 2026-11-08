@@ -70,12 +70,12 @@
   padding-inline: 12px;
 }
 
-.navigation-panel nav {
+.shell-header .navigation-panel nav {
   display: grid;
   gap: 8px;
 }
 
-.navigation-panel nav a {
+.shell-header .navigation-panel nav a {
   display: flex;
   align-items: center;
   min-height: 48px;
@@ -88,8 +88,8 @@
   text-decoration: none;
 }
 
-.navigation-panel nav a:hover,
-.navigation-panel nav a.active {
+.shell-header .navigation-panel nav a:hover,
+.shell-header .navigation-panel nav a.active {
   background: var(--theme-secondary-soft);
   border-color: var(--theme-secondary);
 }
