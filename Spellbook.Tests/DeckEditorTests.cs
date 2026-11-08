@@ -78,6 +78,25 @@ public sealed class DeckEditorTests
     }
 
     [TestMethod]
+    public void EmptyCollectionCanImportDeckListAndOpensImportedDeck()
+    {
+        using var context = CreateContext("[]");
+        var page = context.Render<Decks>();
+        page.WaitForAssertion(() => TestChecks.Contains("No decks yet", page.Markup));
+
+        var transfer = page.FindComponent<Spellbook.Components.DeckListTransfer>();
+        transfer.Find("textarea").Change("4 Lightning Bolt");
+        transfer.FindAll("button").Single(button => button.TextContent == "Review deck list").Click();
+        transfer.Find("input[type=checkbox]").Change(true);
+        transfer.FindAll("button").Single(button => button.TextContent == "Import reviewed deck").Click();
+
+        var imported = TestChecks.Single(SavedDecks(context));
+        TestChecks.AreEqual("Imported deck", imported.Name);
+        TestChecks.AreEqual(4, TestChecks.Single(imported.Cards).Quantity);
+        TestChecks.Contains($"/deck/{imported.Id}", context.Services.GetRequiredService<NavigationManager>().Uri);
+    }
+
+    [TestMethod]
     public void RecoverUnreadableStorageAfterKeepingRawCopyAndConfirmingReplacement()
     {
         using var context = CreateContext("not json");
