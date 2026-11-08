@@ -16,7 +16,7 @@ permissions:
 jobs:
   build:
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out source
@@ -43,6 +43,8 @@ jobs:
           test -n "$(find publish/wwwroot/_framework -maxdepth 1 -type f -print -quit)"
           test -s publish/wwwroot/manifest.webmanifest
           test -s publish/wwwroot/icons/spellbook.svg
+          test -s publish/wwwroot/icons/spellbook-192.png
+          test -s publish/wwwroot/icons/spellbook-512.png
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -56,6 +58,9 @@ jobs:
           index = Path("publish/wwwroot/index.html").read_text()
           assert 'rel="manifest"' in index
           assert 'apple-mobile-web-app-title' in index
+          assert 'rel="apple-touch-icon"' in index
+          assert any(i['sizes'] == '192x192' for i in manifest['icons'])
+          assert any(i['sizes'] == '512x512' for i in manifest['icons'])
           PY
       - name: Upload static site
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -64,6 +69,15 @@ jobs:
           path: publish/wwwroot
           if-no-files-found: error
           retention-days: 14
+      - name: Install iPhone WebKit smoke test browser
+        run: |
+          npm install --prefix tests/browser --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
+          ./tests/browser/node_modules/.bin/playwright install --with-deps webkit
+      - name: Run iPhone WebKit smoke against published static output
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory publish/wwwroot >/tmp/spellbook-http.log 2>&1 &
+          node --test tests/browser/webkit-smoke.test.mjs
+
 
   coverage:
     name: Test coverage
@@ -89,6 +103,8 @@ jobs:
             Spellbook.Tests/packages.lock.json
       - name: Restore tests and application
         run: dotnet restore Spellbook.Tests/Spellbook.Tests.csproj --locked-mode
+      - name: Test Cloudflare feedback security boundary
+        run: node --test tests/feedback-worker.test.mjs
       - name: Test with Cobertura coverage
         id: tests
         run: >-
