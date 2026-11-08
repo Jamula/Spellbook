@@ -79,6 +79,7 @@ public sealed class DeckNavigationTests
     public void SettingsPageExposesPrivacyControlsAndLocalBackupGuidance()
     {
         using var context = new BunitContext();
+        context.JSInterop.Setup<string[]?>("spellbookTheme.load", _ => true).SetResult(null);
         var page = context.Render<Settings>();
         TestChecks.Contains("Settings", page.Markup);
         TestChecks.Contains("Privacy", page.Markup);
