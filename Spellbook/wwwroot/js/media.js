@@ -187,7 +187,7 @@ window.spellbookMedia = (() => {
       image.src = dataUrl;
     });
   }
-  async function scanVideo(videoId, callback) {
+  async function scanVideo(videoId, callback, generation) {
     const video = document.getElementById(videoId);
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0) throw new Error("Video duration is unavailable");
     const interval = Math.max(0.75, video.duration / 100);
@@ -203,8 +203,8 @@ window.spellbookMedia = (() => {
         const image = captureFrame(videoId);
         const text = await recognize(image);
         const stack = text.trim() ? await estimateStackEdges(image) : null;
-        frames.push({ time: times[i], text, stackCountEstimate: stack?.count ?? null, stackConfidence: stack?.confidence ?? "unavailable" });
-        if (callback) await callback.invokeMethodAsync("OnVideoScanProgress", i + 1, times.length);
+        frames.push({ time: times[i], text, stackCountEstimate: stack?.count ?? null, stackConfidence: stack?.confidence ?? "unavailable", sampleIndex: i });
+        if (callback) await callback.invokeMethodAsync("OnVideoScanProgress", generation, i + 1, times.length);
       }
       return { frames, cancelled: cancelScan, sampledFrames: times.length };
     } finally { activeScanId = undefined; video.pause(); }

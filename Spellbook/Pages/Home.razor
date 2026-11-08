@@ -62,6 +62,7 @@ else if (selected is not null)
                             }
                             <button @onclick="CaptureVideoFrame" disabled="@mediaBusy">Capture selected video frame</button>
                             <p class="muted">Automatic scanning samples up to 100 frames across the clip. Longer clips are sampled more sparsely. Check and correct each stack estimate before adding.</p>
+                            @if (!videoScanActive && !string.IsNullOrEmpty(videoScanMessage)) { <p role="status">@videoScanMessage</p> }
                         </div>
                     }
                     @if (videoCandidates.Count > 0)
@@ -451,8 +452,9 @@ else
 
 
     [JSInvokable]
-    public Task OnVideoScanProgress(int current, int total)
+    public Task OnVideoScanProgress(int generation, int current, int total)
     {
+        if (generation != scanGeneration) return Task.CompletedTask;
         videoScanProgress = current; videoScanTotal = total;
         videoScanMessage = "Sampling frames and recognizing text locally.";
         return InvokeAsync(StateHasChanged);
@@ -461,16 +463,19 @@ else
     private async Task ScanVideo()
     {
         if (string.IsNullOrEmpty(videoUrl) || mediaBusy || videoScanActive) return;
+        var generation = scanGeneration;
         mediaBusy = true; videoScanActive = true; videoScanProgress = 0; videoScanTotal = 0;
         videoCandidates.Clear(); videoScanMessage = "Preparing on-device OCR. The first scan downloads OCR assets.";
         using var callback = DotNetObjectReference.Create(this);
         try
         {
-            var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("spellbookMedia.scanVideo", "card-video-preview", callback);
+            var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("spellbookMedia.scanVideo", "card-video-preview", callback, generation);
+            if (generation != scanGeneration) return;
             var frames = result.GetProperty("frames").EnumerateArray().Select(frame => new Spellbook.Services.VideoOcrFrame(
                 frame.GetProperty("time").GetDouble(),
                 frame.GetProperty("text").GetString() ?? "",
-                frame.TryGetProperty("stackCountEstimate", out var estimate) && estimate.ValueKind == System.Text.Json.JsonValueKind.Number && estimate.TryGetInt32(out var count) ? count : null));
+                frame.TryGetProperty("stackCountEstimate", out var estimate) && estimate.ValueKind == System.Text.Json.JsonValueKind.Number && estimate.TryGetInt32(out var count) ? count : null,
+                frame.TryGetProperty("sampleIndex", out var sampleIndex) && sampleIndex.TryGetInt32(out var index) ? index : -1));
             videoCandidates = Spellbook.Services.VideoCardCandidateBuilder.Build(frames);
             videoScanMessage = result.GetProperty("cancelled").GetBoolean() ? "Scan cancelled; review the cards found so far." : $"Scan complete. Review {videoCandidates.Count} candidate(s).";
         }
@@ -478,7 +483,10 @@ else
         {
             videoScanMessage = "Local video scanning failed. You can still capture a frame manually.";
         }
-        finally { videoScanActive = false; mediaBusy = false; }
+        finally
+        {
+            if (generation == scanGeneration) { videoScanActive = false; mediaBusy = false; }
+        }
     }
 
     private async Task CancelVideoScan()
@@ -556,6 +564,10 @@ else
     private void ClearScan()
     {
         scanGeneration++;
+        videoCandidates.Clear();
+        videoScanMessage = "";
+        if (videoScanActive) _ = JS.InvokeVoidAsync("spellbookMedia.cancelVideoScan");
+        videoScanActive = false;
         mediaNames.Clear();
         previewDataUrl = null;
         if (videoUrl is not null) _ = JS.InvokeVoidAsync("spellbookMedia.releaseVideo");

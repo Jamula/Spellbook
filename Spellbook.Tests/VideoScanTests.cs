@@ -34,6 +34,12 @@ public sealed class VideoScanTests
         StringAssert.Contains(candidates[1].EstimateLabel, "enter quantity manually");
         Assert.AreEqual("Lightning Bolt", candidates[2].Name);
         Assert.AreEqual(1, candidates[2].Quantity);
+
+        var sparse = VideoCardCandidateBuilder.Build([
+            new(0, "Island\nBasic Land", null, 0),
+            new(3.6, "Island\nBasic Land", null, 1)
+        ]);
+        Assert.AreEqual(1, sparse.Count, "Adjacent sparse samples from a long clip still describe the same card.");
     }
 
     [TestMethod]
@@ -50,7 +56,7 @@ public sealed class VideoScanTests
 
         var page = context.Render<Home>();
         page.WaitForAssertion(() => Assert.IsTrue(page.Markup.Contains("Add a card")));
-        page.Instance.OnVideoScanProgress(1, 3).GetAwaiter().GetResult();
+        page.Instance.OnVideoScanProgress(1, 1, 3).GetAwaiter().GetResult();
         page.FindComponents<InputFile>()[0].UploadFiles(InputFileContent.CreateFromBinary([1], "scan.mp4", contentType: "video/mp4"));
         page.WaitForAssertion(() => Assert.AreEqual(1, page.FindAll("#card-video-preview").Count));
         var savesBeforeScan = context.JSInterop.Invocations.Count(i => i.Identifier == "spellbookStorage.set");
@@ -67,5 +73,24 @@ public sealed class VideoScanTests
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
         Assert.AreEqual(5, saved.Single().Cards.Single(c => c.Name == "Lightning Bolt").Quantity);
         Assert.IsTrue(saved.Single().Cards.Any(c => c.Name == "Island"));
+    }
+
+    [TestMethod]
+    public void ScanFailureKeepsOutcomeAndManualCaptureGuidanceVisible()
+    {
+        using var context = new BunitContext();
+        context.Services.AddScoped<DeckStore>();
+        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true)
+            .SetResult(JsonSerializer.Serialize(new[] { new Deck { Name = "Video deck" } }));
+        context.JSInterop.Setup<string>("spellbookMedia.prepareVideo", _ => true).SetResult("blob:video");
+        context.JSInterop.Setup<System.Text.Json.JsonElement>("spellbookMedia.scanVideo", _ => true)
+            .SetException(new JSException("OCR worker unavailable"));
+
+        var page = context.Render<Home>();
+        page.WaitForAssertion(() => Assert.IsTrue(page.Markup.Contains("Add a card")));
+        page.FindComponents<InputFile>()[0].UploadFiles(InputFileContent.CreateFromBinary([1], "scan.mp4", contentType: "video/mp4"));
+        page.WaitForAssertion(() => Assert.IsTrue(page.Markup.Contains("card-video-preview")));
+        page.FindAll("button").Single(button => button.TextContent == "Scan video for cards").Click();
+        page.WaitForAssertion(() => Assert.IsTrue(page.Markup.Contains("Local video scanning failed. You can still capture a frame manually.")));
     }
 }
