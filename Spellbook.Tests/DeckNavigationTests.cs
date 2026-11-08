@@ -118,7 +118,8 @@ public sealed class DeckNavigationTests
         var page = context.Render<Decks>();
         page.WaitForAssertion(() => TestChecks.Contains("Alpha", page.Markup));
 
-        var importer = page.FindComponents<InputFile>().Single();
+        var importer = page.FindComponents<InputFile>().Single(input =>
+            input.Find("input").GetAttribute("accept") == ".json,application/json");
         importer.UploadFiles(InputFileContent.CreateFromText("not json", "invalid.json"));
         TestChecks.Contains("Import failed", page.Markup);
 
@@ -129,7 +130,8 @@ public sealed class DeckNavigationTests
             TestChecks.IsType<string>(download.Arguments[1]), new JsonSerializerOptions(JsonSerializerDefaults.Web))![0].Name);
 
         var imported = new Deck { Name = "Imported", Cards = [new DeckCard { Name = "Forest", Quantity = 3 }] };
-        page.FindComponents<InputFile>().Single().UploadFiles(
+        page.FindComponents<InputFile>().Single(input =>
+            input.Find("input").GetAttribute("accept") == ".json,application/json").UploadFiles(
             InputFileContent.CreateFromText(JsonSerializer.Serialize(new[] { imported }), "backup.json"));
         TestChecks.Contains("Imported 1 deck(s).", page.Markup);
         var saved = JsonSerializer.Deserialize<List<Deck>>(
