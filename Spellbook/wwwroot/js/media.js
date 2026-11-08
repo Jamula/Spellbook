@@ -120,6 +120,7 @@ window.spellbookMedia = (() => {
     return canvas.toDataURL("image/jpeg", 0.82);
   }
   let activeScanId;
+  let activeScanController;
   let cancelScan = false;
   function seek(video, time) {
     if (Math.abs(video.currentTime - time) < 0.04 && video.readyState >= 2 && !video.seeking) return Promise.resolve();
@@ -152,28 +153,34 @@ window.spellbookMedia = (() => {
       done();
     });
   }
-  function waitForVideoMetadata(video) {
+  function waitForVideoMetadata(video, signal) {
     const ready = () => video.readyState >= 1 && Number.isFinite(video.duration) && video.duration > 0;
-    if (ready()) return Promise.resolve();
+    if (signal.aborted) return Promise.resolve(false);
+    if (ready()) return Promise.resolve(true);
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => finish(new Error("Video metadata timed out")), 15000);
-      const finish = error => {
+      const finish = (error, metadataReady = true) => {
         clearTimeout(timeout);
         video.removeEventListener("loadedmetadata", check);
         video.removeEventListener("durationchange", check);
         video.removeEventListener("error", failed);
         video.removeEventListener("abort", failed);
-        error ? reject(error) : resolve();
+        signal.removeEventListener("abort", cancelled);
+        if (error) reject(error);
+        else resolve(metadataReady);
       };
       const check = () => {
         if (video.error) return finish(new Error("Video could not be decoded"));
-        if (ready()) finish();
+        if (signal.aborted) finish(null, false);
+        else if (ready()) finish(null, true);
       };
       const failed = () => finish(new Error("Video metadata could not be loaded"));
+      const cancelled = () => finish(null, false);
       video.addEventListener("loadedmetadata", check);
       video.addEventListener("durationchange", check);
       video.addEventListener("error", failed);
       video.addEventListener("abort", failed);
+      signal.addEventListener("abort", cancelled, { once: true });
       check();
     });
   }
@@ -229,15 +236,20 @@ window.spellbookMedia = (() => {
   async function scanVideo(videoId, callback, generation) {
     const video = document.getElementById(videoId);
     if (!video) throw new Error("Selected video preview is unavailable");
-    await waitForVideoMetadata(video);
-    if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error("Video duration is unavailable");
-    const interval = Math.max(0.75, video.duration / 100);
-    const times = [];
-    for (let t = 0; t < video.duration && times.length < 100; t += interval) times.push(t);
-    if (times.length < 100 && times.length && times[times.length - 1] < video.duration - 0.1) times.push(Math.max(0, video.duration - 0.05));
-    activeScanId = videoId; cancelScan = false; video.pause();
+    const controller = new AbortController();
+    activeScanId = videoId;
+    activeScanController = controller;
+    cancelScan = false;
+    video.pause();
     const frames = [];
     try {
+      const metadataReady = await waitForVideoMetadata(video, controller.signal);
+      if (!metadataReady || controller.signal.aborted) return { frames, cancelled: true, sampledFrames: 0 };
+      if (!Number.isFinite(video.duration) || video.duration <= 0) throw new Error("Video duration is unavailable");
+      const interval = Math.max(0.75, video.duration / 100);
+      const times = [];
+      for (let t = 0; t < video.duration && times.length < 100; t += interval) times.push(t);
+      if (times.length < 100 && times.length && times[times.length - 1] < video.duration - 0.1) times.push(Math.max(0, video.duration - 0.05));
       for (let i = 0; i < times.length; i++) {
         if (cancelScan || activeScanId !== videoId) break;
         await seek(video, times[i]);
@@ -248,9 +260,16 @@ window.spellbookMedia = (() => {
         if (callback) await callback.invokeMethodAsync("OnVideoScanProgress", generation, i + 1, times.length);
       }
       return { frames, cancelled: cancelScan, sampledFrames: times.length };
-    } finally { activeScanId = undefined; video.pause(); }
+    } finally {
+      if (activeScanId === videoId) activeScanId = undefined;
+      if (activeScanController === controller) activeScanController = undefined;
+      video.pause();
+    }
   }
-  function cancelVideoScan() { cancelScan = true; }
+  function cancelVideoScan() {
+    cancelScan = true;
+    activeScanController?.abort();
+  }
   window.addEventListener("pagehide", releaseVideo);
 
   return { recognize, convertHeic, prepareVideo, captureFrame, scanVideo, cancelVideoScan, estimateStackEdges, releaseVideo };

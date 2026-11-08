@@ -24,6 +24,9 @@ function createVideo() {
     removeEventListener(name, listener) {
       listeners.get(name)?.delete(listener);
     },
+    listenerCount(name) {
+      return listeners.get(name)?.size ?? 0;
+    },
     dispatch(name) {
       for (const listener of [...(listeners.get(name) ?? [])]) listener();
     }
@@ -48,6 +51,7 @@ function createMedia(video) {
       createElement: name => name === 'canvas' ? canvas : null
     },
     URL,
+    AbortController,
     setTimeout,
     clearTimeout,
     console
@@ -80,4 +84,21 @@ test('video scanning waits for metadata and a decoded first frame', async () => 
   assert.equal(result.frames.length, 1);
   assert.equal(result.frames[0].time, 0);
   assert.equal(result.cancelled, false);
+});
+
+test('cancelling while metadata is loading stops the scan without capturing a frame', async () => {
+  const video = createVideo();
+  const media = createMedia(video);
+  const scan = media.scanVideo('video-preview');
+
+  await Promise.resolve();
+  media.cancelVideoScan();
+  const result = await scan;
+
+  assert.equal(result.frames.length, 0);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.sampledFrames, 0);
+  assert.equal(video.listenerCount('loadedmetadata'), 0);
+  assert.equal(video.listenerCount('durationchange'), 0);
+  assert.equal(video.listenerCount('abort'), 0);
 });
