@@ -4,7 +4,9 @@ window.spellbookPrivacy = (() => {
   const key = 'spellbook.privacy.v1';
   const allowed = new Set(['page_view', 'deck_created', 'card_added', 'backup_exported', 'feedback_opened']);
   let choice = { usage: false, recordings: false };
+  let unsavedChoice = false;
   function read() {
+    if (unsavedChoice) return { ...choice };
     try {
       const saved = JSON.parse(localStorage.getItem(key));
       choice = { usage: saved?.usage === true, recordings: saved?.recordings === true };
@@ -13,8 +15,14 @@ window.spellbookPrivacy = (() => {
   }
   function setConsent(usage, recordings) {
     choice = { usage: usage === true, recordings: recordings === true };
-    try { localStorage.setItem(key, JSON.stringify(choice)); return true; }
-    catch { return false; } // Denial/revocation still applies to this page in memory.
+    try {
+      localStorage.setItem(key, JSON.stringify(choice));
+      unsavedChoice = false;
+      return true;
+    } catch {
+      unsavedChoice = true;
+      return false; // Denial/revocation still applies to this page in memory.
+    }
   }
   function track(name, ...extra) {
     // Reject arbitrary payloads, URLs, titles and identifiers. Never queue events.
