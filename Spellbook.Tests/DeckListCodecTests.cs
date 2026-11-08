@@ -25,6 +25,24 @@ public sealed class DeckListCodecTests
     }
 
     [TestMethod]
+    public void ScryfallStylePlainTextPreservesCanonicalCardAndSupportedZones()
+    {
+        var sample = File.ReadAllText(Path.Join(AppContext.BaseDirectory, "Samples", "scryfall-compatible.txt"));
+        var imported = DeckListCodec.Parse(sample, "Scryfall sample").Deck;
+        TestChecks.AreEqual(1, imported.Cards.Single(card => card.Name == "Avacyn, Angel of Hope").Quantity);
+        TestChecks.AreEqual("Commander", imported.Cards.Single(card => card.Name == "Avacyn, Angel of Hope").Section);
+        TestChecks.AreEqual(4, imported.Cards.Single(card => card.Name == "Lightning Bolt").Quantity);
+        TestChecks.AreEqual("Sideboard", imported.Cards.Single(card => card.Name == "Negate").Section);
+
+        var exported = DeckListCodec.ExportText(imported);
+        var roundTripped = DeckListCodec.Parse(exported, "Scryfall round trip").Deck;
+        TestChecks.AreEqual(Rows(imported), Rows(roundTripped));
+        TestChecks.Contains("Mainboard", exported);
+        TestChecks.Contains("Sideboard", exported);
+        TestChecks.Contains("Commander", exported);
+    }
+
+    [TestMethod]
     public void TextMergesDuplicatesWithinEachZoneAndPreservesSplitAndUnicodeNames()
     {
         var deck = DeckListCodec.Parse("# exported list\n4 Lightning Bolt\n2 lightning bolt\nSB: 1 Lightning Bolt\n[Commander]\n1 Éowyn, Shieldmaiden\n// Main Deck:\n1 Fire // Ice\n1 Sol Ring [Ramp]", " Trimmed ").Deck;
