@@ -57,3 +57,8 @@ TestResult.xml
 coverage/
 coverage.cobertura.xml
 nunit-*.xml
+
+# Local release verification outputs
+publish/
+release-bundle/
+.github/release-site/
