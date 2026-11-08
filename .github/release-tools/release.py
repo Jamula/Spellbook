@@ -99,7 +99,10 @@ def candidate(run, checks, version):
 def production_environment(environment, policies):
     approvals = [r for r in environment["protection_rules"] if r["type"] == "required_reviewers"]
     configured_reviewers = any(
-        any(isinstance(reviewer.get("id"), int) and reviewer.get("type") in {"User", "Team"}
+        any(
+            reviewer.get("type") in {"User", "Team"} and
+            isinstance(reviewer.get("reviewer"), dict) and
+            type(reviewer["reviewer"].get("id")) is int
             for reviewer in rule.get("reviewers", []))
         for rule in approvals
     )

@@ -63,10 +63,12 @@ class ReleaseContracts(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError): candidate(run, checks | {"security_run": analysis | {field: value}}, "v1.2.3")
 
     def test_production_requires_manual_review_and_no_competing_git_deploy(self):
-        env = dict(protection_rules=[dict(type="required_reviewers", prevent_self_review=False, reviewers=[{"id": 1, "type": "User"}])], deployment_branch_policy={"custom_branch_policies": True})
+        env = dict(protection_rules=[dict(type="required_reviewers", prevent_self_review=False, reviewers=[{"type": "User", "reviewer": {"id": 1, "login": "release-owner"}}])], deployment_branch_policy={"custom_branch_policies": True})
         policies = {"branch_policies": [{"name": "main", "type": "branch"}]}
         production_environment(env, policies)
-        for bad in (env | {"protection_rules": []}, env | {"deployment_branch_policy": {}}, env | {"protection_rules": [dict(type="required_reviewers", reviewers=[])]}, env | {"protection_rules": [dict(type="required_reviewers", reviewers=[{"id": 1, "type": "Bot"}])]}):
+        team_env = env | {"protection_rules": [dict(type="required_reviewers", reviewers=[{"type": "Team", "reviewer": {"id": 2, "name": "Release approvers", "slug": "release-approvers"}}])]}
+        production_environment(team_env, policies)
+        for bad in (env | {"protection_rules": []}, env | {"deployment_branch_policy": {}}, env | {"protection_rules": [dict(type="required_reviewers", reviewers=[])]}, env | {"protection_rules": [dict(type="required_reviewers", reviewers=[{"id": 1, "type": "User"}])]}, env | {"protection_rules": [dict(type="required_reviewers", reviewers=[{"type": "Bot", "reviewer": {"id": 1}}])]}, env | {"protection_rules": [dict(type="required_reviewers", reviewers=[{"type": "User", "reviewer": {"id": True}}])] }):
             with self.subTest(env=bad), self.assertRaises(ValueError): production_environment(bad, policies)
         with self.assertRaises(ValueError): production_environment(env, {"branch_policies": [{"name": "*"}]})
         project = {"success": True, "result": {"production_branch": "release-production", "source": {"config": {"production_deployments_enabled": False}}}}
