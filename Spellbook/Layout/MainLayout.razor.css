@@ -5,7 +5,105 @@
   flex-direction: column;
 }
 
+.shell-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.navigation-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+
+.navigation-toggle-icon {
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.navigation-panel {
+  position: absolute;
+  z-index: 21;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-end: max(18px, calc((100vw - 1100px) / 2));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: min(70dvh, 520px);
+  width: min(320px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 55px #14251b55;
+  overflow-y: auto;
+}
+
+.navigation-panel[hidden] {
+  display: none !important;
+}
+
+.navigation-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.navigation-panel-heading h2 {
+  font-size: 1.15rem;
+}
+
+.navigation-panel-heading button {
+  padding-inline: 12px;
+}
+
+.navigation-panel ::deep nav {
+  display: grid;
+  gap: 8px;
+}
+
+.navigation-panel ::deep nav a {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: #22352a;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.navigation-panel ::deep nav a:hover,
+.navigation-panel ::deep nav a.active {
+  background: var(--theme-secondary-soft);
+  border-color: var(--theme-secondary);
+}
+
 main {
   width: 100%;
   flex: 1;
+}
+
+@media (max-width: 520px) {
+  .navigation-panel {
+    inset-inline-start: 12px;
+    inset-inline-end: 12px;
+    width: auto;
+    max-height: calc(100dvh - 110px);
+  }
 }
