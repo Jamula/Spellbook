@@ -1,7 +1,114 @@
 @page "/settings"
+@inject DeckStore Store
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@using Spellbook.Models
+@using Spellbook.Services
 <h1>Settings</h1>
 <p class="muted">Privacy and data controls for this browser.</p>
-<p><strong>Decks are stored locally.</strong> Browser storage does not sync between devices. Use the deck page to export a JSON backup.</p>
+<section aria-labelledby="backup-heading">
+    <h2 id="backup-heading">Deck backup and restore</h2>
+    <p><strong>Decks are stored locally in this browser.</strong> They do not sync between devices. Keep an exported JSON backup somewhere safe. On supported devices, the system file picker and browser downloads can use available Files locations such as iCloud Drive, OneDrive, or Google Drive; Spellbook does not connect to those providers directly.</p>
+    @if (!loaded) { <p>Loading saved decks…</p> }
+    else if (loadFailed)
+    {
+        <p role="alert">@error</p>
+        <p>Download the raw data first. Restoring a backup replaces unreadable browser data.</p>
+        <button class="secondary" @onclick="ExportDamaged">Download raw saved data</button>
+        <label><input type="checkbox" @bind="confirmRecovery" /> I understand restoring a backup will replace unreadable data.</label>
+        <label class="upload">Restore JSON backup <InputFile OnChange="Recover" accept=".json,application/json" disabled="@(!confirmRecovery)" /></label>
+    }
+    else
+    {
+        <p>Export is named with your local date, account handle when sign-in is available, and app version. Until account sign-in is implemented, the name uses <code>local</code>.</p>
+        <div class="toolbar">
+            <button class="secondary" @onclick="Export">Export JSON backup</button>
+            <label class="upload">Import JSON backup <InputFile OnChange="Import" accept=".json,application/json" /></label>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
+</section>
 <Spellbook.Layout.ThemePicker />
-
 <Spellbook.Layout.PrivacyControls />
+
+@code {
+    private List<Deck> decks = [];
+    private string message = "";
+    private string? error;
+    private bool loaded;
+    private bool loadFailed;
+    private bool confirmRecovery;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { decks = await Store.LoadAsync(); }
+        catch (InvalidDataException ex) { loadFailed = true; error = ex.Message; }
+        loaded = true;
+        StateHasChanged();
+    }
+
+    private async Task Export()
+    {
+        try
+        {
+            await Store.ExportAsync(decks);
+            message = "JSON backup downloaded. Store it somewhere safe.";
+        }
+        catch (JSException) { message = "Could not download the backup. Try your browser's download controls."; }
+    }
+
+    private async Task ExportDamaged()
+    {
+        try
+        {
+            await Store.ExportDamagedAsync();
+            message = "Raw saved data downloaded.";
+        }
+        catch (JSException) { message = "Could not download the raw saved data."; }
+    }
+
+    private async Task Recover(InputFileChangeEventArgs e)
+    {
+        if (!confirmRecovery || !loadFailed) return;
+        try
+        {
+            var recovered = Store.ParseImport(await ReadBackup(e));
+            await Store.SaveAsync(recovered);
+            decks = recovered;
+            loadFailed = false;
+            confirmRecovery = false;
+            error = null;
+            message = $"Restored {recovered.Count} deck(s).";
+        }
+        catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or JSException)
+        {
+            message = $"Recovery failed: {ex.Message}";
+        }
+    }
+
+    private async Task Import(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var imported = Store.ParseImport(await ReadBackup(e));
+            foreach (var deck in imported) deck.Id = Guid.NewGuid();
+            var candidate = decks.Concat(imported).ToList();
+            await Store.SaveAsync(candidate);
+            decks = candidate;
+            message = $"Imported {imported.Count} deck(s).";
+        }
+        catch (Exception ex) when (ex is InvalidDataException or JsonException or IOException or JSException)
+        {
+            message = $"Import failed: {ex.Message}";
+        }
+    }
+
+    private static async Task<string> ReadBackup(InputFileChangeEventArgs e)
+    {
+        if (e.File.Size > 2_000_000) throw new InvalidDataException("Backup must be smaller than 2 MB.");
+        using var stream = e.File.OpenReadStream(2_000_000);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync();
+    }
+}
