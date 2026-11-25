@@ -157,6 +157,37 @@ jobs:
         run: |
           cp coverage/coverage.cobertura.xml coverage.cobertura.xml
           dotnet run --project .github/scripts/CoverageChecker/CoverageChecker.csproj --configuration Release -- coverage.cobertura.xml
+      - name: Report uncovered application decision paths
+        if: ${{ !cancelled() && hashFiles('coverage.cobertura.xml') != '' }}
+        run: |
+          python3 - <<'PY'
+          import re
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          root = ET.parse("coverage.cobertura.xml").getroot()
+          rows = set()
+          for cls in root.findall(".//class"):
+              source = cls.get("filename", "?")
+              for line in cls.findall("./lines/line"):
+                  number = int(line.get("number", "0"))
+                  hits = int(line.get("hits", "0"))
+                  m = re.search(r"\((\d+)/\s*(\d+)\)", line.get("condition-coverage", ""))
+                  if m:
+                      covered, total = map(int, m.groups())
+                      if covered < total:
+                          rows.add((total-covered, source, number, f"{covered}/{total} branches"))
+                  if hits == 0:
+                      rows.add((0, source, number, "uncovered line"))
+          lines = ["### Application coverage gaps", "", "| Source | Line | Gap |", "| --- | ---: | --- |"]
+          for missed, source, number, detail in sorted(rows, key=lambda r: (-r[0], r[1], r[2], r[3]))[:150]:
+              lines.append(f"| {source} | {number} | {detail} |")
+          lines.append(f"\nDistinct reported gaps: {len(rows)} (showing up to 150; not an aggregate branch denominator).")
+          report = "\n".join(lines) + "\n"
+          print(report)
+          import os
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              out.write(report)
+          PY
       - name: Save test and coverage diagnostics
         if: ${{ !cancelled() && hashFiles('coverage/**/*.trx', 'coverage/**/coverage.cobertura.xml', 'coverage.cobertura.xml') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
