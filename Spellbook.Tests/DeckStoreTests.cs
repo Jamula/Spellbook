@@ -323,6 +323,26 @@ public sealed class DeckStoreTests
         await TestChecks.ThrowsAsync<JSException>(() => store.ExportAsync([new Deck()]));
     }
 
+    [TestMethod]
+    [DataRow(null, null, "local-decks-unknown")]
+    [DataRow(" ._- ", "+++build", "local-decks-unknown")]
+    [DataRow("alice", "  ", "alice-decks-unknown")]
+    public void BackupNameFallsBackForMissingOrUnusableIdentifiers(string? user, string? version, string expected)
+    {
+        Assert.AreEqual("2026-02-03-" + expected + ".json",
+            DeckBackupFileName.Create(user, version, new DateTime(2026, 2, 3)));
+    }
+
+    [TestMethod]
+    [DataRow("relative.jpg")]
+    [DataRow("https://cards.scryfall.io.example.com/card.jpg")]
+    public void BackupRejectsMalformedAndLookalikeImageOrigins(string imageUrl)
+    {
+        var deck = new Deck { Cards = [new DeckCard { Name = "Opt", Details = new CardDetails { ImageUrl = imageUrl } }] };
+        var store = new DeckStore(new StorageRuntime());
+        TestChecks.Throws<InvalidDataException>(() => store.ParseImport(JsonSerializer.Serialize(new[] { deck })));
+    }
+
     private sealed class StorageRuntime : IJSRuntime
     {
         public string? StoredJson { get; set; }
