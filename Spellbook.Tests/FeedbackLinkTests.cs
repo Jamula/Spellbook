@@ -104,4 +104,54 @@ public sealed class FeedbackLinkTests
         TestChecks.AreEqual(2, context.JSInterop.Invocations["spellbookFeedback.submit"].Count);
         TestChecks.AreEqual(prior.Arguments[2], context.JSInterop.Invocations["spellbookFeedback.submit"].Last().Arguments[2]);
     }
+
+    [TestMethod]
+    public void OpenFailureOffersFallbackWithoutSubmission()
+    {
+        using var context = new BunitContext();
+        context.JSInterop.Setup<bool>("spellbookFeedback.open", _ => true).SetException(new JSException("Unavailable"));
+        var page = context.Render<FeedbackLink>();
+        page.Find(".feedback-link").Click();
+        page.WaitForAssertion(() => TestChecks.Contains("In-app feedback is unavailable", page.Markup));
+        Assert.IsTrue(page.Find(".feedback-actions button:last-child").HasAttribute("disabled"));
+        TestChecks.Empty(context.JSInterop.Invocations["spellbookFeedback.submit"]);
+    }
+
+    [TestMethod]
+    [DataRow("http://github.com/Jamula/Spellbook/issues/123")]
+    [DataRow("https://github.com/Other/Repo/issues/123")]
+    [DataRow("not a URL")]
+    public void RejectsUnsafeOrMalformedIssueResults(string url)
+    {
+        using var context = Context();
+        context.JSInterop.Setup<string>("spellbookFeedback.submit", _ => true).SetResult(url);
+        var page = context.Render<FeedbackLink>();
+        page.Find(".feedback-link").Click();
+        page.Find("#feedback-subject").Input("Valid subject");
+        page.Find("#feedback-details").Input("Valid description");
+        page.Find(".feedback-consent input").Change(true);
+        page.Find(".feedback-actions button:last-child").Click();
+        page.WaitForAssertion(() => TestChecks.Contains("could not be submitted", page.Markup));
+        TestChecks.Empty(page.FindAll("a[href='" + url + "']"));
+    }
+
+    [TestMethod]
+    public void SpamChallengeFailureRetainsTextAndExplainsRecovery()
+    {
+        using var context = Context();
+        context.JSInterop.Setup<string>("spellbookFeedback.submit", _ => true)
+            .SetException(new JSException("Complete the spam prevention challenge"));
+        var page = context.Render<FeedbackLink>();
+        page.Find(".feedback-link").Click();
+        page.Find("#feedback-subject").Input("  Valid subject  ");
+        page.Find("#feedback-details").Input("  Valid description  ");
+        page.Find(".feedback-consent input").Change(true);
+        page.Find(".feedback-actions button:last-child").Click();
+        page.WaitForAssertion(() => TestChecks.Contains("Complete the spam prevention challenge", page.Markup));
+        var invocation = TestChecks.Single(context.JSInterop.Invocations["spellbookFeedback.submit"]);
+        TestChecks.AreEqual("Valid subject", invocation.Arguments[1]);
+        TestChecks.AreEqual("Valid description", invocation.Arguments[2]);
+        Assert.IsFalse(page.Find(".feedback-actions button:last-child").HasAttribute("disabled"));
+    }
+
 }
