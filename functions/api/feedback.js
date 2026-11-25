@@ -24,8 +24,27 @@ export async function onRequestPost({ request, env }) {
 
   let payload;
   try {
-    const raw = await request.text();
-    if (new TextEncoder().encode(raw).length > 32768) return json({ error: "Feedback too large" }, 413);
+    const reader = request.body?.getReader();
+    if (!reader) return json({ error: "Invalid feedback" }, 400);
+    const decoder = new TextDecoder("utf-8", { fatal: true });
+    let bytes = 0;
+    let raw = "";
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > 32768) {
+          // Do not wait for a potentially hostile producer to finish.
+          void reader.cancel().catch(() => {});
+          return json({ error: "Feedback too large" }, 413);
+        }
+        raw += decoder.decode(value, { stream: true });
+      }
+      raw += decoder.decode();
+    } finally {
+      reader.releaseLock();
+    }
     payload = JSON.parse(raw);
   } catch { return json({ error: "Invalid feedback" }, 400); }
   const kind = payload?.kind;
