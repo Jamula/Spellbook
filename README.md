@@ -1,14 +1,14 @@
 # Spellbook · Magic Deck Lab
 
-A **local-first .NET 10 Blazor WebAssembly** starter for Magic: The Gathering deck management. Designed to run in mobile Safari and desktop browsers, with **no required paid services**.
+A **local-first .NET 10 Blazor WebAssembly** app for Magic: The Gathering deck management. Designed to run in mobile Safari and desktop browsers, with **no required paid services**.
 
-## Features in this starter
+## Features
 - Create, rename and delete decks; choose a format, including casual and Two-Headed Giant.
 - Add cards by name; adjust quantities.
 - Autosave deck data in browser `localStorage`.
 - Import and export complete collections as JSON files.
-- Select images or videos from the iPhone photo library (names only; no file upload or recognition in this release).
-- Responsive mobile layout and web app manifest.
+- Select photos and videos for local card recognition and editable review; use Scryfall to verify names. Media is not uploaded by the scanner.
+- Responsive mobile layout, list and visual card modes, mana symbols, and web app manifest.
 
 ## Run locally
 
@@ -37,31 +37,25 @@ cp coverage/coverage.cobertura.xml coverage.cobertura.xml
 dotnet run --project .github/scripts/CoverageChecker/CoverageChecker.csproj -c Release -- coverage.cobertura.xml
 ```
 
-Use a fresh `coverage` directory for each run. Coverage measures the application assembly, including UI code; test code and generated build files are excluded. Two bUnit component tests exercise the rendered deck editor: deck/card editing and restoration/import/export/media selection. The tests use a fake browser storage boundary. They do not measure JavaScript or replace browser testing.
+Use a fresh `coverage` directory for each run. Coverage measures the application assembly, including UI code; test code and generated build files are excluded. Component tests exercise deck/card editing, restoration, import/export and media workflows using a fake browser storage boundary. They do not measure JavaScript or replace browser testing.
 
-GitHub Actions runs the tests, enforces an 80% minimum application line coverage, saves a downloadable Cobertura report, and uploads it directly to GitHub's built-in coverage service. No separate service, secret, or paid API is required. Fork PRs run tests and retain the report without requesting write access to the base repository. The `Test coverage` check should be required in branch rules so merging waits for coverage upload. Coverage on `main` establishes the baseline after merge.
+GitHub Actions runs the tests, enforces a 97% minimum application line coverage, saves a downloadable Cobertura report, and uploads it directly to GitHub's built-in coverage service. No separate service, secret, or paid API is required. Fork PRs run tests and retain the report without requesting write access to the base repository. The `Test coverage` check should be required in branch rules so merging waits for coverage upload. Coverage on `main` establishes the baseline after merge.
 
 ## Cost & privacy safeguards
 - No Azure resources, paid APIs, or external services are required.
-- Cards are entered manually; no automatic Scryfall lookup or AI usage yet.
+- Manual entry remains available offline; optional Scryfall card search sends search text, not saved decks or media.
 - Data exists **only in the current browser** unless exported. Clearing browser data can erase it. **Export backups regularly.**
 - JSON imports are merged as new decks; duplicate names are allowed.
 - Card media remains on your device; the picker does not send files anywhere.
-- This is starter source, **not yet compiled or deployed**. CI will validate builds when connected to a repository.
+- The app is deployed at [Spellbook](https://spellbook-ag4.pages.dev/). Physical iPhone installation and offline acceptance are tracked in [#4](https://github.com/Jamula/Spellbook/issues/4).
 
-## Next milestones
-1. Add Scryfall name validation and card metadata (respect fair-use limits and cache appropriately).
-2. Support common decklist text formats (Moxfield and Archidekt exports).
-3. Add photo review and on-device frame extraction; ensure all automatic recognition is optional and cost-gated.
-4. Optional GitHub synchronization with safe OAuth, version history, and backup recovery.
-5. Deck synergies, 2HG analysis, and offline support.
+## Roadmap and repository
 
-## Proposed repository
-`jamula/spellbook` (private). No GitHub repository is created by this archive.
+See the [roadmap](https://github.com/Jamula/Spellbook/issues/1) and [open issues](https://github.com/Jamula/Spellbook/issues) for current delivery scope, acceptance gates and dependencies. Authentication and private cross-device persistence remain future work; no account sync is enabled.
 
 ## Moxfield / Archidekt deck lists
 
-Open **Import/export a Moxfield or Archidekt deck list** below the deck editor. Paste an export or choose a `.txt`/`.csv` file, give the new deck a name, and select **Review deck list**. Check every card name, quantity, and zone, acknowledge the review, then import. This creates a new deck and leaves existing decks intact. There is no account connection, URL scraping, automatic card-name lookup, or remote upload.
+Open **Settings > Import > Deck-list import and export**. Paste an export or choose a `.txt`/`.csv` file, give the new deck a name, and select **Review deck list**. Check every card name, quantity, and zone, acknowledge the review, then import. This creates a new deck and leaves existing decks intact. There is no account connection, URL scraping, automatic card-name lookup, or remote upload.
 
 Supported interchange formats:
 
@@ -90,7 +84,4 @@ behavior. Advice explains its basis and is for playtesting, not legality rulings
 
 Optional card details survive local storage and JSON export/import. Legacy
 backups still load; malformed detail values are rejected through the existing
-backup-recovery flow without overwriting saved data. This feature makes no
-network calls. A future confirmed Scryfall lookup can prefill
-`DeckCard.Details.ManaValue` and `TypeLine` from its existing `ScryfallCard`
-contract; colors and roles must stay unknown until supported or reviewed.
+backup-recovery flow without overwriting saved data. The statistics calculation makes no network calls. Scryfall lookups can prefill known card metadata; roles still require user review.
