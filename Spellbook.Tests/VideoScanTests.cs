@@ -93,4 +93,34 @@ public sealed class VideoScanTests
         page.FindAll("button").Single(button => button.TextContent == "Scan video for cards").Click();
         page.WaitForAssertion(() => Assert.IsTrue(page.Markup.Contains("Local video scanning failed. You can still capture a frame manually.")));
     }
+
+    [TestMethod]
+    public void NonadjacentSamplesAndUnknownSampleIndexesDoNotMergeDistantSightings()
+    {
+        var candidates = VideoCardCandidateBuilder.Build([
+            new(12, "Island", 250, 4),
+            new(0, "Island", 2, -1),
+            new(3, "island", 1, 0),
+            new(6, "Island", 300, -1),
+            new(9, "Island", null, 2),
+            new(1, "X", null),
+            new(2, new string('A', 201), null)
+        ]);
+        Assert.AreEqual(5, candidates.Count);
+        Assert.AreEqual(2, candidates[0].Quantity);
+        Assert.IsTrue(candidates[0].HasStackEstimate);
+        Assert.AreEqual(1, candidates[1].Quantity);
+        Assert.IsFalse(candidates[1].HasStackEstimate);
+        Assert.AreEqual(250, candidates[4].Quantity);
+        Assert.IsTrue(candidates[4].HasStackEstimate);
+    }
+
+    [TestMethod]
+    public void OcrSkipsUnusableLinesAndPreservesTheNextValidTitle()
+    {
+        Assert.AreEqual("", CardTitleExtractor.FromOcr(null));
+        Assert.AreEqual("", CardTitleExtractor.FromOcr("X"));
+        Assert.AreEqual("Island", CardTitleExtractor.FromOcr(new string('A', 201) + "\nX\nIsland"));
+        Assert.AreEqual("Fire // Ice", CardTitleExtractor.FromOcr("Fire // Ice {U}"));
+    }
 }
