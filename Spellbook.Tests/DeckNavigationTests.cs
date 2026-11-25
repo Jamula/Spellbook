@@ -259,4 +259,54 @@ public sealed class DeckNavigationTests
         TestChecks.Contains("Export JSON backup", page.Markup);
         TestChecks.Contains("Import JSON backup", page.Markup);
     }
+
+    [TestMethod]
+    public void ChangingDeckRouteRefreshesEditorAndMissingRouteCannotWrite()
+    {
+        var alpha = new Deck { Name = "Alpha" };
+        var beta = new Deck { Name = "Beta" };
+        using var context = new BunitContext();
+        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true)
+            .SetResult(JsonSerializer.Serialize(new[] { alpha, beta }));
+        context.JSInterop.SetupVoid("spellbookStorage.set", _ => true).SetVoidResult();
+        context.Services.AddScoped<DeckStore>();
+        var page = context.Render<Home>(p => p.Add(c => c.DeckId, alpha.Id));
+        page.WaitForAssertion(() => Assert.AreEqual("Alpha", page.Find("h1").TextContent));
+        page.Render(p => p.Add(c => c.DeckId, beta.Id));
+        Assert.AreEqual("Beta", page.Find("h1").TextContent);
+        page.Render(p => p.Add(c => c.DeckId, Guid.NewGuid()));
+        Assert.AreEqual("Edit deck", page.Find("h1").TextContent);
+        TestChecks.Empty(page.FindAll(".editor"));
+        TestChecks.Empty(context.JSInterop.Invocations["spellbookStorage.set"]);
+    }
+
+    [TestMethod]
+    public void InvalidCollectionNamesAndFailedCreationDoNotMutateStorage()
+    {
+        using var context = new BunitContext();
+        context.JSInterop.Setup<string?>("spellbookStorage.get", _ => true)
+            .SetResult("[{\"name\":\"Alpha\"}]");
+        context.JSInterop.SetupVoid("spellbookStorage.set", _ => true)
+            .SetException(new JSException("Quota exceeded"));
+        context.Services.AddScoped<DeckStore>();
+        var page = context.Render<Decks>();
+        page.WaitForAssertion(() => TestChecks.Contains("Alpha", page.Markup));
+        var newName = page.Find("[aria-label='New deck name']");
+        newName.Change("  ");
+        page.Find(".toolbar button").Click();
+        TestChecks.Contains("Deck name must be", page.Markup);
+        newName.Change(new string('x', 161));
+        page.Find(".toolbar button").Click();
+        TestChecks.Contains("Deck name must be", page.Markup);
+        page.Find("[aria-label='Deck name for Alpha']").Change("");
+        TestChecks.Contains("Deck name must be", page.Markup);
+        page.Find("[aria-label='Deck name for Alpha']").Change(new string('x', 161));
+        TestChecks.Contains("Deck name must be", page.Markup);
+        TestChecks.Empty(context.JSInterop.Invocations["spellbookStorage.set"]);
+        newName.Change("New deck");
+        page.Find(".toolbar button").Click();
+        TestChecks.Contains("Could not save this deck", page.Markup);
+        TestChecks.Single(page.FindAll(".deck-tile"));
+        TestChecks.AreEqual("Alpha", page.Find(".deck-tile input").GetAttribute("value"));
+    }
 }
