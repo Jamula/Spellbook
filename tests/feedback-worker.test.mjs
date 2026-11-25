@@ -95,3 +95,24 @@ test('valid UTF-8 feedback is accepted within character limits', async () => {
   assert.equal(response.status, 201);
   assert.ok(body.body.includes(unicode.details));
 });
+
+test('oversized streaming feedback without Content-Length is rejected before external calls', async () => {
+  let cancelled = false;
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array(32769)); },
+    cancel() { cancelled = true; }
+  });
+  const request = new Request(origin + '/api/feedback', {
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body, duplex: 'half'
+  });
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw Error('Unexpected request'); };
+  try {
+    const response = await onRequestPost({ request, env });
+    assert.equal(response.status, 413);
+    assert.equal(cancelled, true);
+    assert.equal(calls, 0);
+  } finally { globalThis.fetch = original; }
+});
