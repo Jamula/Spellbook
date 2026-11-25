@@ -5,13 +5,28 @@ Spellbook is a **static .NET 10 Blazor WebAssembly** app. No server process or d
 ## Build locally or in GitHub Actions
 
 ```sh
-dotnet restore Spellbook/Spellbook.csproj
-dotnet publish Spellbook/Spellbook.csproj -c Release -o publish
+dotnet restore Spellbook/Spellbook.csproj --locked-mode
+dotnet publish Spellbook/Spellbook.csproj -c Release --no-restore -o publish
 ```
 
 The deployable files are under `publish/wwwroot`. The GitHub Actions **Build Spellbook** workflow produces `spellbook-site`, containing a ZIP of those exact files plus integrity metadata. See [releases.md](releases.md) for extraction and production controls.
 
-## Create a free Pages project
+## Existing Pages build configuration
+
+The existing Git-connected `spellbook` project uses the following build command, updated 2026-11-24 to resolve #101. Read the exact SDK from `global.json` and restore in locked mode:
+
+```sh
+sdk_version=$(python3 -c 'import json; print(json.load(open("global.json"))["sdk"]["version"])') &&
+curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh &&
+bash /tmp/dotnet-install.sh --version "$sdk_version" --install-dir /tmp/dotnet &&
+/tmp/dotnet/dotnet --version &&
+/tmp/dotnet/dotnet restore Spellbook/Spellbook.csproj --locked-mode &&
+/tmp/dotnet/dotnet publish Spellbook/Spellbook.csproj -c Release --no-restore -o publish
+```
+
+Output directory remains `publish/wwwroot`. The production branch and preview settings were not changed. Do not substitute a floating SDK channel; update SDK and generated lockfiles together. Preview verification is tracked in #101. Do not create another project.
+
+## Create a free Pages project (new installations only)
 
 1. In Cloudflare Dashboard, go to **Workers & Pages** and create a **Pages / Direct Upload** project named `spellbook` if the name is available. Verify the free-plan terms for your account before proceeding.
 2. Do **not** enable paid Workers, R2, D1, Azure, or AI APIs. Do not attach payment methods specifically for this app.
