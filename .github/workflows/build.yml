@@ -133,6 +133,13 @@ jobs:
             Spellbook.Tests/packages.lock.json
       - name: Restore tests and application
         run: dotnet restore Spellbook.Tests/Spellbook.Tests.csproj --locked-mode
+      - name: Collect exact SDK 10.0.404 lockfile changes for review
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'codex/spellbook-01-lock-recovery'
+        run: |
+          dotnet --version
+          dotnet restore Spellbook.Tests/Spellbook.Tests.csproj --force-evaluate
+          git diff -- Spellbook/packages.lock.json Spellbook.Tests/packages.lock.json
+          # Diagnostic only; earlier failed locked restore remains failed.
       - name: Verify privacy consent and no-network boundary
         run: node --test scripts/privacy.test.cjs
       - name: Test Cloudflare feedback security boundary
