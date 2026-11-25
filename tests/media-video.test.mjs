@@ -33,7 +33,7 @@ function createVideo() {
   };
 }
 
-function createMedia(video) {
+function createMedia(video, recognize = async () => ({ data: { text: '' } })) {
   const canvas = {
     width: 0,
     height: 0,
@@ -42,7 +42,7 @@ function createMedia(video) {
   };
   const window = {
     addEventListener() {},
-    Tesseract: { createWorker: async () => ({ recognize: async () => ({ data: { text: '' } }) }) }
+    Tesseract: { createWorker: async () => ({ recognize }) }
   };
   const sandbox = {
     window,
@@ -101,4 +101,27 @@ test('cancelling while metadata is loading stops the scan without capturing a fr
   assert.equal(video.listenerCount('loadedmetadata'), 0);
   assert.equal(video.listenerCount('durationchange'), 0);
   assert.equal(video.listenerCount('abort'), 0);
+});
+
+test('cancelling during OCR discards the in-flight frame and emits no progress', async () => {
+  const video = createVideo();
+  video.duration = 0.05;
+  video.readyState = 2;
+  let entered, release;
+  const started = new Promise(resolve => { entered = resolve; });
+  const media = createMedia(video, () => {
+    entered();
+    return new Promise(resolve => { release = resolve; });
+  });
+  let updates = 0;
+  const scan = media.scanVideo('video-preview', {
+    invokeMethodAsync: async () => { updates++; }
+  }, 1);
+  await started;
+  media.cancelVideoScan();
+  release({ data: { text: 'Avacyn' } });
+  const result = await scan;
+  assert.equal(result.cancelled, true);
+  assert.equal(result.frames.length, 0);
+  assert.equal(updates, 0);
 });
