@@ -136,4 +136,45 @@ public sealed class DeckListCodecTests
     }
 
     private static string[] Rows(Deck deck) => deck.Cards.Select(c => $"{c.Section}|{c.Name}|{c.Quantity}").Order().ToArray();
+
+    [TestMethod]
+    [DataRow("Quantity,Count,Name\n1,1,Opt")]
+    [DataRow("Quantity,Name,Card\n1,Opt,Opt")]
+    public void CsvRejectsDuplicateAliases(string text) =>
+        TestChecks.Throws<InvalidDataException>(() => DeckListCodec.Parse(text, "Ambiguous"));
+
+    [TestMethod]
+    [DataRow("", 1)]
+    [DataRow("   ", 1)]
+    [DataRow("Opt", 0)]
+    [DataRow("Opt", 251)]
+    public void ExportRejectsInvalidCardRecords(string name, int quantity)
+    {
+        var deck = new Deck { Cards = [new DeckCard { Name = name, Quantity = quantity }] };
+        TestChecks.Throws<InvalidDataException>(() => DeckListCodec.ExportText(deck));
+        TestChecks.Throws<InvalidDataException>(() => DeckListCodec.ExportCsv(deck));
+    }
+
+    [TestMethod]
+    public void ExportRejectsCombinedQuantityAcrossEquivalentZones()
+    {
+        var deck = new Deck { Cards = [
+            new DeckCard { Name = "Opt", Quantity = 200, Section = "Main" },
+            new DeckCard { Name = "opt", Quantity = 51, Section = "Main" }
+        ] };
+        TestChecks.Throws<InvalidDataException>(() => DeckListCodec.ExportText(deck));
+        TestChecks.Throws<InvalidDataException>(() => DeckListCodec.ExportCsv(deck));
+    }
+
+    [TestMethod]
+    [DataRow("Card [Ramp]")]
+    [DataRow("Card (ABC) 123")]
+    public void TextExportRejectsAmbiguousNamesButCsvPreservesThem(string name)
+    {
+        var deck = new Deck { Cards = [new DeckCard { Name = name }] };
+        TestChecks.Throws<InvalidDataException>(() => DeckListCodec.ExportText(deck));
+        var restored = DeckListCodec.Parse(DeckListCodec.ExportCsv(deck), "Round trip").Deck;
+        TestChecks.AreEqual(name, TestChecks.Single(restored.Cards).Name);
+    }
+
 }
