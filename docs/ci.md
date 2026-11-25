@@ -72,8 +72,8 @@ compiler warnings as errors, and publishes that Release build with `--no-build`.
 The coverage job builds its instrumented test target separately; it does not
 depend on downloaded build outputs or a serialized job chain.
 
-xUnit runs independent test classes/collections concurrently, bounded by the
-runner's CPU count (`maxParallelThreads: 0`) with conservative async scheduling.
+The application suite uses MSTest with Microsoft.Testing.Platform and bUnit.
+Measure actual test concurrency and configure isolation explicitly before increasing it.
 Each test owns its bUnit context or fake runtime. Avoid global mutable state,
 network calls, sleeps, and filesystem fixtures shared between tests. Prefer a
 few behavior-focused workflows that verify outcomes and cover meaningful paths;
@@ -84,11 +84,14 @@ dedicated collection rather than disabling parallel execution for the suite.
 
 The test job writes TRX results and reports actual counts, skips, failures, and
 duration to the Actions summary. A missing report, zero executed tests, or an
-unsuccessful run fails validation. VSTest interrupts a test that hangs for two
-minutes; process dumps are disabled, and the job has a separate 15-minute limit.
+unsuccessful run fails validation. The job has a 15-minute limit; verify per-test timeout and diagnostics with the current Microsoft.Testing.Platform runner.
 
 `spellbook-coverage` retains raw Cobertura and TRX diagnostics for 14 days even
 if the test or coverage gate fails, provided files were produced. The original
 test command's failed status is preserved. The static site artifact also lasts
 14 days; longer-lived release artifacts belong to the Phase2 release process.
 The existing coverage threshold and GitHub coverage upload remain enforced.
+
+## Velocity and quality follow-up
+
+See [#103](https://github.com/Jamula/Spellbook/issues/103). Preserve the 97% line gate; measure branch coverage and adopt a 90% gate after baseline remediation. Record real phase timings and failures, including review wait and merge eligibility. Keep WebKit and CodeQL as independent required evidence. A 30-second focused validation target does not authorize removing full checks.
