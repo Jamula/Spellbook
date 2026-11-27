@@ -216,3 +216,44 @@ test('stack edge estimate is low-confidence when visible edges are present and u
     assert.equal(result.unavailable, null);
   } finally { await context.close(); }
 });
+
+test('iPhone WebKit scrolls a long autocomplete list and selects the last result by keyboard', async () => {
+  const context = await browser.newContext({ ...devices['iPhone 13'], baseURL: origin });
+  const page = await context.newPage();
+  try {
+    const cards = Array.from({ length: 10 }, (_, i) => ({
+      object: 'card', name: 'Test Angel ' + (i + 1), cmc: 3,
+      mana_cost: '{2}{W}', type_line: 'Creature', colors: ['W']
+    }));
+    await page.route('https://api.scryfall.com/**', route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ object: 'list', data: cards })
+    }));
+    await openAppReady(page);
+    await page.getByRole('textbox', { name: 'New deck name' }).fill('Autocomplete scroll test');
+    await page.getByRole('button', { name: 'Create deck' }).click();
+    const input = page.getByRole('combobox', { name: 'Card name' });
+    await input.fill('Angel');
+    const list = page.getByRole('listbox', { name: 'Card suggestions' });
+    await list.getByRole('option', { name: 'Test Angel 10', exact: true }).waitFor();
+    assert.equal(await list.getByRole('option').count(), 10);
+    assert.ok(await list.evaluate(el => el.scrollHeight > el.clientHeight));
+    for (let i = 1; i < 10; i++) {
+      await input.press('ArrowDown');
+      await page.waitForFunction(index =>
+        document.querySelector('[role="combobox"]')?.getAttribute('aria-activedescendant') === 'card-suggestion-' + index, i);
+    }
+    assert.ok(await list.evaluate(el => el.scrollTop > 0));
+    const visible = await list.evaluate(el => {
+      const option = el.querySelector('#card-suggestion-9').getBoundingClientRect();
+      const bounds = el.getBoundingClientRect();
+      return option.top >= bounds.top - 1 && option.bottom <= bounds.bottom + 1;
+    });
+    assert.equal(visible, true);
+    await input.press('Enter');
+    await list.waitFor({ state: 'detached' });
+    assert.equal(await input.inputValue(), 'Test Angel 10');
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.locator('.card-row').getByText('Test Angel 10', { exact: true }).waitFor();
+  } finally { await context.close(); }
+});
