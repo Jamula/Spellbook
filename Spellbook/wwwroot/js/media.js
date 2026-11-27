@@ -236,7 +236,9 @@ window.spellbookMedia = (() => {
   async function scanVideo(videoId, callback, generation) {
     const video = document.getElementById(videoId);
     if (!video) throw new Error("Selected video preview is unavailable");
+    activeScanController?.abort();
     const controller = new AbortController();
+    const stopped = () => controller.signal.aborted || activeScanController !== controller;
     activeScanId = videoId;
     activeScanController = controller;
     cancelScan = false;
@@ -251,19 +253,24 @@ window.spellbookMedia = (() => {
       for (let t = 0; t < video.duration && times.length < 100; t += interval) times.push(t);
       if (times.length < 100 && times.length && times[times.length - 1] < video.duration - 0.1) times.push(Math.max(0, video.duration - 0.05));
       for (let i = 0; i < times.length; i++) {
-        if (cancelScan || activeScanId !== videoId) break;
+        if (stopped()) break;
         await seek(video, times[i]);
+        if (stopped()) break;
         const image = captureFrame(videoId);
         const text = await recognize(image);
+        if (stopped()) break;
         const stack = text.trim() ? await estimateStackEdges(image) : null;
+        if (stopped()) break;
         frames.push({ time: times[i], text, stackCountEstimate: stack?.count ?? null, stackConfidence: stack?.confidence ?? "unavailable", sampleIndex: i });
         if (callback) await callback.invokeMethodAsync("OnVideoScanProgress", generation, i + 1, times.length);
       }
-      return { frames, cancelled: cancelScan, sampledFrames: times.length };
+      return { frames, cancelled: stopped(), sampledFrames: times.length };
     } finally {
-      if (activeScanId === videoId) activeScanId = undefined;
-      if (activeScanController === controller) activeScanController = undefined;
-      video.pause();
+      if (activeScanController === controller) {
+        activeScanId = undefined;
+        activeScanController = undefined;
+        video.pause();
+      }
     }
   }
   function cancelVideoScan() {
