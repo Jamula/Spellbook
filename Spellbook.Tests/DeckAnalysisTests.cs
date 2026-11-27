@@ -142,5 +142,47 @@ public sealed class DeckAnalysisTests
         Assert.AreEqual("https://cards.scryfall.io/small/front/a/b/card.jpg", card.Details.ImageUrl);
     }
 
+    [TestMethod]
+    public void KnownTypeWithoutManaAndMixedColorlessIdentityRemainUnknown()
+    {
+        var deck = new Deck { Cards = [
+            new() { Name = "No mana", Quantity = 2, Section = " main ", Details = new() { TypeLine = "Artifact", Colors = "CG", RolesReviewed = true } },
+            new() { Name = "Early", Quantity = 1, Details = new() { TypeLine = "Sorcery", ManaValue = 1, Colors = " w ", RolesReviewed = true } },
+            new() { Name = "Late", Quantity = 1, Details = new() { TypeLine = "Creature", ManaValue = 4, Colors = "U", RolesReviewed = true } }
+        ] };
+        var stats = DeckAnalysis.Calculate(deck);
+        Assert.AreEqual(4, stats.Total);
+        Assert.AreEqual(0, stats.UnknownTypes);
+        Assert.AreEqual(2, stats.UnknownMana);
+        Assert.AreEqual(2, stats.UnknownColors);
+        Assert.AreEqual(1, stats.Colors['W']);
+        Assert.AreEqual(0, stats.Colors['C']);
+        Assert.AreEqual(0, stats.UnknownRoles);
+        Assert.AreEqual(0, stats.Draw);
+        Assert.AreEqual(0, stats.Ramp);
+        Assert.AreEqual(0, stats.Removal);
+        Assert.IsFalse(stats.Advice.Any(a => a.Contains("More than half")));
+        deck.Cards.RemoveAt(0);
+        stats = DeckAnalysis.Calculate(deck);
+        Assert.AreEqual(0, stats.UnknownMana);
+        Assert.IsFalse(stats.Advice.Any(a => a.Contains("More than half")), "Exactly half is not a majority.");
+        deck.Cards[1].Quantity = 2;
+        Assert.IsTrue(DeckAnalysis.Calculate(deck).Advice.Any(a => a.Contains("More than half")));
+    }
+
+    [TestMethod]
+    public void AllLandDeckHasNoNonlandCurveOrExpensiveSpellAdvice()
+    {
+        var deck = new Deck { Cards = [
+            new() { Name = "Forest", Quantity = 8, Details = new() { TypeLine = "Basic Land — Forest", Colors = "G", RolesReviewed = true } }
+        ] };
+        var stats = DeckAnalysis.Calculate(deck);
+        Assert.AreEqual(8, stats.Lands);
+        Assert.AreEqual(0, stats.UnknownMana);
+        Assert.AreEqual(0, stats.Curve.Sum());
+        Assert.IsFalse(stats.Advice.Any(a => a.Contains("More than half")));
+        Assert.IsTrue(stats.Advice.Any(a => a.Contains("above 45%")));
+    }
+
     private static void Save(IRenderedComponent<Home> page) => page.FindAll("button").Single(b => b.TextContent == "Save card details").Click();
 }

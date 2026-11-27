@@ -3,10 +3,11 @@ using System.Xml;
 using System.Xml.Linq;
 
 const double minimumCoverage = 97;
+const double minimumBranchCoverage = 90;
 
-if (args.Length != 1)
+if (args.Length < 1 || args.Length > 2 || (args.Length == 2 && args[1] != "--require-branch"))
 {
-    Console.Error.WriteLine("Usage: CoverageChecker <coverage.cobertura.xml>");
+    Console.Error.WriteLine("Usage: CoverageChecker <coverage.cobertura.xml> [--require-branch]");
     return 2;
 }
 
@@ -29,6 +30,24 @@ try
     if (percentage < minimumCoverage)
     {
         throw new InvalidDataException($"Application line coverage is below the CI minimum of {minimumCoverage:0}%.");
+    }
+
+    var branchesValid = ReadLineCount(report, "branches-valid");
+    var branchesCovered = ReadLineCount(report, "branches-covered");
+    if (branchesValid <= 0 || branchesCovered < 0 || branchesCovered > branchesValid)
+    {
+        throw new InvalidDataException("Coverage report must contain measured application branches.");
+    }
+
+    var branchPercentage = 100d * branchesCovered / branchesValid;
+    Console.WriteLine($"Application branch coverage: {branchPercentage:F2}% ({branchesCovered}/{branchesValid} branches)");
+    if (branchPercentage < minimumBranchCoverage)
+    {
+        if (args.Length == 2)
+        {
+            throw new InvalidDataException($"Application branch coverage is below the CI minimum of {minimumBranchCoverage:0}%.");
+        }
+        Console.WriteLine($"Branch coverage baseline is below the future {minimumBranchCoverage:0}% gate; remediation required.");
     }
 
     NormalizeSources(report, repositoryRoot);
