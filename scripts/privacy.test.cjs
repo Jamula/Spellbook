@@ -43,3 +43,14 @@ test('corrupt/blocked storage and blocker/offline environment fail closed', () =
   assert.equal(api.revoke(), false);
   assert.equal(api.track('page_view'), false);
 });
+
+test('application bootstrap has no remote scripts, tracking pixels or speculative external connections', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../Spellbook/wwwroot/index.html'), 'utf8');
+  for (const match of html.matchAll(/<(?:script|img|iframe|link)\b[^>]*>/gi)) {
+    const tag = match[0];
+    for (const attribute of tag.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)) {
+      assert.doesNotMatch(attribute[1], /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i, tag);
+    }
+    assert.doesNotMatch(tag, /\brel\s*=\s*["'](?:preconnect|dns-prefetch)["']/i);
+  }
+});
